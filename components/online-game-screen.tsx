@@ -29,6 +29,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
   const [status, setStatus] = useState<string>("")
   const [isConnected, setIsConnected] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [canStartGame, setCanStartGame] = useState(false)
 
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
 
@@ -50,10 +51,22 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
       await gameManager.createOrGetPlayer(playerName)
 
       // Set callbacks
-      gameManager.setStatusCallback(setStatus)
+      gameManager.setStatusCallback((newStatus) => {
+        console.log("[v0] Status update:", newStatus)
+        setStatus(newStatus)
+        if (newStatus.includes("encontrado")) {
+          setCanStartGame(true)
+        }
+      })
+
       gameManager.setGameStateCallback((newGameState) => {
         console.log("[v0] Received game state update:", newGameState)
         setGameState(newGameState)
+        if (!gameEngine) {
+          const engine = new TrucoEngine(playerName, "Oponente")
+          engine.setGameState(newGameState)
+          setGameEngine(engine)
+        }
       })
 
       setIsConnected(true)
@@ -67,12 +80,33 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     }
   }
 
-  const startGame = () => {
+  const startGame = async () => {
     console.log("[v0] Starting new game")
-    const engine = new TrucoEngine(playerName, "Oponente")
-    setGameEngine(engine)
-    setGameState(engine.getGameState())
-    setStatus("¡Partida iniciada!")
+    setIsProcessing(true)
+
+    try {
+      const isReady = await gameManager.isGameReady()
+
+      if (isReady) {
+        setStatus("Sincronizando partida...")
+      } else {
+        const engine = new TrucoEngine(playerName, "Oponente")
+        const initialState = engine.getGameState()
+
+        setGameEngine(engine)
+        setGameState(initialState)
+
+        await gameManager.startGame(initialState)
+        setStatus("¡Partida iniciada!")
+      }
+
+      setCanStartGame(false)
+    } catch (error) {
+      console.error("[v0] Error starting game:", error)
+      setStatus("Error al iniciar partida")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const processAction = async (action: GameAction) => {
@@ -82,18 +116,13 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     setIsProcessing(true)
 
     try {
-      // Process action locally
       const newState = gameEngine.processAction(action)
       setGameState(newState)
       setSelectedCardIndex(undefined)
 
-      // Record move online
       await gameManager.makeMove(action)
-
-      // Update game state online
       await gameManager.updateGameState(newState)
 
-      // Play sounds
       switch (action.type) {
         case "PLAY_CARD":
           playSound("cardPlay")
@@ -110,7 +139,6 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
           break
       }
 
-      // Update message
       updateMessage(action, newState)
     } catch (error) {
       console.error("[v0] Error processing action:", error)
@@ -196,7 +224,6 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     onBackToMenu()
   }
 
-  // Show matchmaking screen if no game started
   if (!gameState) {
     return (
       <div
@@ -228,19 +255,27 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
                 </div>
               )}
 
-              {status.includes("encontrado") && (
+              {canStartGame && !isProcessing && (
                 <Button
                   onClick={startGame}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12"
+                  disabled={isProcessing}
                 >
                   ¡Comenzar Partida!
                 </Button>
+              )}
+
+              {isProcessing && (
+                <div className="text-amber-200 text-sm">
+                  <div className="animate-pulse">Iniciando partida...</div>
+                </div>
               )}
 
               <Button
                 onClick={handleBackToMenu}
                 variant="outline"
                 className="w-full border-2 border-amber-600 text-amber-200 hover:bg-amber-600/20 font-bold h-12 bg-transparent"
+                disabled={isProcessing}
               >
                 Cancelar
               </Button>
@@ -251,7 +286,6 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     )
   }
 
-  // Game screen (similar to original but with online features)
   const playerHand = gameState.players[gameManager.isPlayerOne() ? 0 : 1].hand
   const opponentHand = gameState.players[gameManager.isPlayerOne() ? 1 : 0].hand
   const playerCard = gameState.table[gameManager.isPlayerOne() ? 0 : 1]
