@@ -15,21 +15,21 @@ export class OnlineTrucoEngine {
     return {
       players: [
         {
-          id: "player1",
+          id: currentPlayerId, // This device's player
           name: player1Name,
           hand: player1Hand,
           score: 0,
           isBot: false,
         },
         {
-          id: "player2",
+          id: "opponent", // The other player
           name: player2Name,
           hand: player2Hand,
           score: 0,
           isBot: false,
         },
       ],
-      currentPlayer: 0,
+      currentPlayer: 0, // Index of whose turn it is (0 or 1)
       phase: "playing",
       table: [],
       bazas: [],
@@ -43,7 +43,7 @@ export class OnlineTrucoEngine {
       currentBaza: 0,
       lastWinner: 0,
       waitingForResponse: false,
-      currentPlayerId, // Track which player this instance belongs to
+      currentPlayerId, // ID of the player using this device
     }
   }
 
@@ -59,18 +59,23 @@ export class OnlineTrucoEngine {
       currentPlayerId,
     )
 
-    // Validate and merge state safely
     engine.gameState = {
       ...engine.gameState,
       ...syncedState,
       currentPlayerId,
-      // Ensure players array is valid
-      players: syncedState.players.map((player: any, index: number) => ({
-        ...engine.gameState.players[index],
-        ...player,
-        // Ensure hand is always an array
-        hand: Array.isArray(player.hand) ? player.hand : engine.gameState.players[index].hand,
-      })),
+      // Ensure the first player is always the current device's player
+      players: [
+        {
+          ...syncedState.players[0],
+          id: currentPlayerId, // This device's player
+          hand: Array.isArray(syncedState.players[0].hand) ? syncedState.players[0].hand : [],
+        },
+        {
+          ...syncedState.players[1],
+          id: "opponent", // The other player
+          hand: Array.isArray(syncedState.players[1].hand) ? syncedState.players[1].hand : [],
+        },
+      ],
     }
 
     return engine
@@ -92,8 +97,8 @@ export class OnlineTrucoEngine {
         if (!player) {
           console.log("[v0] Invalid player at index", index)
           return {
-            id: `player${index + 1}`,
-            name: `Player ${index + 1}`,
+            id: index === 0 ? this.gameState.currentPlayerId : "opponent",
+            name: index === 0 ? "Player 1" : "Player 2",
             hand: [],
             score: 0,
             isBot: false,
@@ -114,24 +119,11 @@ export class OnlineTrucoEngine {
   }
 
   private getCurrentPlayerIndex(): number {
-    if (!this.gameState.players || this.gameState.players.length === 0) {
-      console.log("[v0] No players found, defaulting to index 0")
-      return 0
-    }
-
-    const index = this.gameState.players.findIndex((p) => p && p.id === this.gameState.currentPlayerId)
-
-    if (index === -1) {
-      console.log("[v0] Player not found, defaulting to index 0. Looking for:", this.gameState.currentPlayerId)
-      return 0
-    }
-
-    return index
+    return 0 // This device's player is always at index 0
   }
 
   public isMyTurn(): boolean {
-    const myIndex = this.getCurrentPlayerIndex()
-    return this.gameState.currentPlayer === myIndex
+    return this.gameState.currentPlayer === 0 // 0 means it's this device's turn
   }
 
   public getBettingState(): BettingState {
@@ -498,33 +490,30 @@ export class OnlineTrucoEngine {
   }
 
   public getCurrentPlayer(): any {
-    const myIndex = this.getCurrentPlayerIndex()
-    if (!this.gameState.players || !this.gameState.players[myIndex]) {
+    if (!this.gameState.players || !this.gameState.players[0]) {
       console.log("[v0] Current player not found")
       return {
-        id: "unknown",
+        id: this.gameState.currentPlayerId,
         name: "Unknown Player",
         hand: [],
         score: 0,
         isBot: false,
       }
     }
-    return this.gameState.players[myIndex]
+    return this.gameState.players[0]
   }
 
   public getOpponent(): any {
-    const myIndex = this.getCurrentPlayerIndex()
-    const opponentIndex = 1 - myIndex
-    if (!this.gameState.players || !this.gameState.players[opponentIndex]) {
+    if (!this.gameState.players || !this.gameState.players[1]) {
       console.log("[v0] Opponent not found")
       return {
-        id: "unknown",
+        id: "opponent",
         name: "Unknown Player",
         hand: [],
         score: 0,
         isBot: false,
       }
     }
-    return this.gameState.players[opponentIndex]
+    return this.gameState.players[1]
   }
 }
