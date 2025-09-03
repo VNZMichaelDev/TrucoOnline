@@ -31,6 +31,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
   const [isProcessing, setIsProcessing] = useState(false)
   const [canStartGame, setCanStartGame] = useState(false)
   const [opponentName, setOpponentName] = useState<string>("Oponente")
+  const [isPlayerInitialized, setIsPlayerInitialized] = useState(false)
 
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
 
@@ -48,10 +49,9 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     try {
       console.log("[v0] Initializing online game for:", playerName)
 
-      // Create or get player
       await gameManager.createOrGetPlayer(playerName)
+      setIsPlayerInitialized(true)
 
-      // Set callbacks
       gameManager.setStatusCallback((newStatus) => {
         console.log("[v0] Status update:", newStatus)
         setStatus(newStatus)
@@ -63,15 +63,13 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
       gameManager.setGameStateCallback((newGameState) => {
         console.log("[v0] Received game state update:", newGameState)
 
-        if (newGameState && newGameState.players) {
-          // Get opponent name from game state
+        if (newGameState && newGameState.players && isPlayerInitialized) {
           const myPlayerId = gameManager.getPlayerId()
           const opponent = newGameState.players.find((p) => p.id !== myPlayerId)
           if (opponent) {
             setOpponentName(opponent.name)
           }
 
-          // Create or update engine with real player names
           if (!gameEngine) {
             const myPlayer = newGameState.players.find((p) => p.id === myPlayerId)
             if (myPlayer && opponent) {
@@ -79,7 +77,6 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
               setGameEngine(engine)
             }
           } else {
-            // Update existing engine with synced state
             const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, gameManager.getPlayerId())
             setGameEngine(updatedEngine)
           }
@@ -90,7 +87,6 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
 
       setIsConnected(true)
 
-      // Start matchmaking
       await gameManager.joinMatchmaking()
     } catch (error) {
       console.error("[v0] Error initializing online game:", error)
@@ -104,6 +100,10 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     setIsProcessing(true)
 
     try {
+      if (!isPlayerInitialized) {
+        throw new Error("Player not initialized")
+      }
+
       const isReady = await gameManager.isGameReady()
 
       if (isReady) {
@@ -242,7 +242,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     onBackToMenu()
   }
 
-  if (!gameState) {
+  if (!gameState || !isPlayerInitialized) {
     return (
       <div
         className="min-h-screen flex items-center justify-center p-4"
