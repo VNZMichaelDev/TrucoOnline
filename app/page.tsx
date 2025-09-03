@@ -6,35 +6,19 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import MainMenu from "@/components/main-menu"
 import GameScreen from "@/components/game-screen"
+import OnlineGameScreen from "@/components/online-game-screen"
 import SettingsScreen from "@/components/settings-screen"
-import MatchmakingScreen from "@/components/matchmaking-screen"
 
-type Screen = "name-entry" | "main-menu" | "matchmaking" | "game" | "settings"
+type Screen = "name-entry" | "main-menu" | "game" | "online-game" | "settings"
 
 export default function HomePage() {
   const [playerName, setPlayerName] = useState("")
-  const [opponentName, setOpponentName] = useState("")
-  const [gameId, setGameId] = useState("") // Added gameId state for real multiplayer
   const [currentScreen, setCurrentScreen] = useState<Screen>("name-entry")
 
   const handleNameSubmit = () => {
     if (playerName.trim()) {
       setCurrentScreen("main-menu")
     }
-  }
-
-  const handleStartMatchmaking = () => {
-    setCurrentScreen("matchmaking")
-  }
-
-  const handleMatchFound = (opponent: string, matchGameId: string) => {
-    setOpponentName(opponent)
-    setGameId(matchGameId)
-    setCurrentScreen("game")
-  }
-
-  const handleCancelMatchmaking = () => {
-    setCurrentScreen("main-menu")
   }
 
   const renderScreen = () => {
@@ -80,29 +64,17 @@ export default function HomePage() {
         return (
           <MainMenu
             playerName={playerName}
-            onStartMatchmaking={handleStartMatchmaking}
+            onStartGame={() => setCurrentScreen("game")}
+            onStartOnlineGame={() => setCurrentScreen("online-game")}
             onOpenSettings={() => setCurrentScreen("settings")}
           />
         )
 
-      case "matchmaking":
-        return (
-          <MatchmakingScreen
-            playerName={playerName}
-            onMatchFound={handleMatchFound}
-            onCancel={handleCancelMatchmaking}
-          />
-        )
-
       case "game":
-        return (
-          <GameScreen
-            playerName={playerName}
-            opponentName={opponentName}
-            gameId={gameId} // Pass gameId to GameScreen for real multiplayer
-            onBackToMenu={() => setCurrentScreen("main-menu")}
-          />
-        )
+        return <GameScreen playerName={playerName} onBackToMenu={() => setCurrentScreen("main-menu")} />
+
+      case "online-game":
+        return <OnlineGameScreen playerName={playerName} onBackToMenu={() => setCurrentScreen("main-menu")} />
 
       case "settings":
         return <SettingsScreen onBackToMenu={() => setCurrentScreen("main-menu")} />
