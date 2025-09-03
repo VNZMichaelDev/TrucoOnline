@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react"
-import { TrucoEngine } from "@/lib/truco-engine"
+import { OnlineTrucoEngine } from "@/lib/online-truco-engine"
 import { OnlineGameManager } from "@/lib/online-game-manager"
 import { useAudio } from "@/hooks/use-audio"
 import HandDisplay from "@/components/ui/hand-display"
@@ -22,7 +22,7 @@ interface OnlineGameScreenProps {
 
 export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGameScreenProps) {
   const [gameManager] = useState(() => new OnlineGameManager())
-  const [gameEngine, setGameEngine] = useState<TrucoEngine | null>(null)
+  const [gameEngine, setGameEngine] = useState<OnlineTrucoEngine | null>(null)
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | undefined>()
   const [message, setMessage] = useState<string>("")
@@ -30,6 +30,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
   const [isConnected, setIsConnected] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [canStartGame, setCanStartGame] = useState(false)
+  const [opponentName, setOpponentName] = useState<string>("Oponente")
 
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
 
@@ -61,12 +62,30 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
 
       gameManager.setGameStateCallback((newGameState) => {
         console.log("[v0] Received game state update:", newGameState)
-        setGameState(newGameState)
-        if (!gameEngine) {
-          const engine = new TrucoEngine(playerName, "Oponente")
-          engine.setGameState(newGameState)
-          setGameEngine(engine)
+
+        if (newGameState && newGameState.players) {
+          // Get opponent name from game state
+          const myPlayerId = gameManager.getPlayerId()
+          const opponent = newGameState.players.find((p) => p.id !== myPlayerId)
+          if (opponent) {
+            setOpponentName(opponent.name)
+          }
+
+          // Create or update engine with real player names
+          if (!gameEngine) {
+            const myPlayer = newGameState.players.find((p) => p.id === myPlayerId)
+            if (myPlayer && opponent) {
+              const engine = new OnlineTrucoEngine(myPlayer.name, opponent.name, myPlayerId)
+              setGameEngine(engine)
+            }
+          } else {
+            // Update existing engine with synced state
+            const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, gameManager.getPlayerId())
+            setGameEngine(updatedEngine)
+          }
         }
+
+        setGameState(newGameState)
       })
 
       setIsConnected(true)
@@ -90,7 +109,8 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
       if (isReady) {
         setStatus("Sincronizando partida...")
       } else {
-        const engine = new TrucoEngine(playerName, "Oponente")
+        const myPlayerId = gameManager.getPlayerId()
+        const engine = new OnlineTrucoEngine(playerName, opponentName, myPlayerId)
         const initialState = engine.getGameState()
 
         setGameEngine(engine)
@@ -121,7 +141,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
       setSelectedCardIndex(undefined)
 
       await gameManager.makeMove(action)
-      await gameManager.updateGameState(newState)
+      await gameManager.updateGameState(gameEngine.getSyncableState())
 
       switch (action.type) {
         case "PLAY_CARD":
@@ -196,9 +216,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
   const handleCardClick = (cardIndex: number) => {
     if (!gameState || !gameEngine) return
 
-    const isMyTurn = gameManager.isPlayerOne() ? gameState.currentPlayer === 0 : gameState.currentPlayer === 1
-
-    if (isMyTurn && gameEngine.canPlayCard(cardIndex) && !isProcessing) {
+    if (gameEngine.isMyTurn() && gameEngine.canPlayCard(cardIndex) && !isProcessing) {
       setSelectedCardIndex(cardIndex)
     }
   }
@@ -247,6 +265,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
               <div className="text-amber-100">
                 <p className="text-lg">¡Hola {playerName}!</p>
                 <p className="text-sm mt-2">{status || "Conectando..."}</p>
+                {opponentName !== "Oponente" && <p className="text-sm text-green-400 mt-1">Oponente: {opponentName}</p>}
               </div>
 
               {status.includes("Esperando") && (
@@ -286,11 +305,13 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     )
   }
 
-  const playerHand = gameState.players[gameManager.isPlayerOne() ? 0 : 1].hand
-  const opponentHand = gameState.players[gameManager.isPlayerOne() ? 1 : 0].hand
-  const playerCard = gameState.table[gameManager.isPlayerOne() ? 0 : 1]
-  const opponentCard = gameState.table[gameManager.isPlayerOne() ? 1 : 0]
-  const isMyTurn = gameManager.isPlayerOne() ? gameState.currentPlayer === 0 : gameState.currentPlayer === 1
+  const myPlayerIndex = gameEngine?.getCurrentPlayerIndex() || 0
+  const opponentIndex = 1 - myPlayerIndex
+  const playerHand = gameState.players[myPlayerIndex].hand
+  const opponentHand = gameState.players[opponentIndex].hand
+  const playerCard = gameState.table[myPlayerIndex]
+  const opponentCard = gameState.table[opponentIndex]
+  const isMyTurn = gameEngine?.isMyTurn() || false
 
   return (
     <div
@@ -326,7 +347,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
       <div className="flex-1 flex flex-col justify-between px-2" style={{ height: "calc(100vh - 88px)" }}>
         <div className="text-center h-16 flex-shrink-0">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <span className="text-amber-200 font-medium text-xs">Oponente</span>
+            <span className="text-amber-200 font-medium text-xs">{opponentName}</span>
             <span className="text-amber-300 text-xs">({opponentHand.length})</span>
           </div>
           <div className="flex justify-center gap-1">
@@ -369,7 +390,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
               </Button>
             )}
 
-            <GameActions gameState={gameState} onAction={handleGameAction} disabled={isProcessing || !isMyTurn} />
+            <GameActions
+              gameState={gameState}
+              onAction={handleGameAction}
+              disabled={isProcessing}
+              bettingState={gameEngine?.getBettingState()}
+            />
 
             {gameState.phase === "finished" && (
               <Button
