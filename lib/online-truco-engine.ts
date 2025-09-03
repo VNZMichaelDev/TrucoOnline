@@ -48,11 +48,31 @@ export class OnlineTrucoEngine {
   }
 
   public static fromSyncedState(syncedState: any, currentPlayerId: string): OnlineTrucoEngine {
-    const engine = new OnlineTrucoEngine("", "", currentPlayerId)
+    if (!syncedState || !syncedState.players || syncedState.players.length !== 2) {
+      console.log("[v0] Invalid synced state, creating new game")
+      return new OnlineTrucoEngine("Player 1", "Player 2", currentPlayerId)
+    }
+
+    const engine = new OnlineTrucoEngine(
+      syncedState.players[0]?.name || "Player 1",
+      syncedState.players[1]?.name || "Player 2",
+      currentPlayerId,
+    )
+
+    // Validate and merge state safely
     engine.gameState = {
+      ...engine.gameState,
       ...syncedState,
       currentPlayerId,
+      // Ensure players array is valid
+      players: syncedState.players.map((player: any, index: number) => ({
+        ...engine.gameState.players[index],
+        ...player,
+        // Ensure hand is always an array
+        hand: Array.isArray(player.hand) ? player.hand : engine.gameState.players[index].hand,
+      })),
     }
+
     return engine
   }
 
@@ -60,13 +80,32 @@ export class OnlineTrucoEngine {
     const currentPlayerIndex = this.getCurrentPlayerIndex()
     const opponentIndex = 1 - currentPlayerIndex
 
+    if (!this.gameState.players || this.gameState.players.length !== 2) {
+      console.log("[v0] Invalid game state for sync")
+      return this.gameState
+    }
+
     return {
       ...this.gameState,
-      players: this.gameState.players.map((player, index) => ({
-        ...player,
-        // Hide opponent's hand for security
-        hand: index === opponentIndex ? [] : player.hand,
-      })),
+      players: this.gameState.players.map((player, index) => {
+        // Ensure player object is valid
+        if (!player) {
+          console.log("[v0] Invalid player at index", index)
+          return {
+            id: `player${index + 1}`,
+            name: `Player ${index + 1}`,
+            hand: [],
+            score: 0,
+            isBot: false,
+          }
+        }
+
+        return {
+          ...player,
+          // Hide opponent's hand for security, but keep structure
+          hand: index === opponentIndex ? [] : Array.isArray(player.hand) ? player.hand : [],
+        }
+      }),
     }
   }
 
@@ -75,7 +114,19 @@ export class OnlineTrucoEngine {
   }
 
   private getCurrentPlayerIndex(): number {
-    return this.gameState.players.findIndex((p) => p.id === this.gameState.currentPlayerId) || 0
+    if (!this.gameState.players || this.gameState.players.length === 0) {
+      console.log("[v0] No players found, defaulting to index 0")
+      return 0
+    }
+
+    const index = this.gameState.players.findIndex((p) => p && p.id === this.gameState.currentPlayerId)
+
+    if (index === -1) {
+      console.log("[v0] Player not found, defaulting to index 0. Looking for:", this.gameState.currentPlayerId)
+      return 0
+    }
+
+    return index
   }
 
   public isMyTurn(): boolean {
@@ -428,6 +479,11 @@ export class OnlineTrucoEngine {
     const myIndex = this.getCurrentPlayerIndex()
     const myPlayer = this.gameState.players[myIndex]
 
+    if (!myPlayer || !Array.isArray(myPlayer.hand)) {
+      console.log("[v0] Invalid player or hand for card play")
+      return false
+    }
+
     return (
       isMyTurn &&
       !this.gameState.waitingForResponse &&
@@ -443,12 +499,32 @@ export class OnlineTrucoEngine {
 
   public getCurrentPlayer(): any {
     const myIndex = this.getCurrentPlayerIndex()
+    if (!this.gameState.players || !this.gameState.players[myIndex]) {
+      console.log("[v0] Current player not found")
+      return {
+        id: "unknown",
+        name: "Unknown Player",
+        hand: [],
+        score: 0,
+        isBot: false,
+      }
+    }
     return this.gameState.players[myIndex]
   }
 
   public getOpponent(): any {
     const myIndex = this.getCurrentPlayerIndex()
     const opponentIndex = 1 - myIndex
+    if (!this.gameState.players || !this.gameState.players[opponentIndex]) {
+      console.log("[v0] Opponent not found")
+      return {
+        id: "unknown",
+        name: "Unknown Player",
+        hand: [],
+        score: 0,
+        isBot: false,
+      }
+    }
     return this.gameState.players[opponentIndex]
   }
 }
