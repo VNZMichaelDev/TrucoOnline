@@ -436,4 +436,19 @@ export class OnlineTrucoEngine {
       this.gameState.phase === "playing"
     )
   }
+
+  public getPlayerId(): string {
+    return this.gameState.currentPlayerId
+  }
+
+  public getCurrentPlayer(): any {
+    const myIndex = this.getCurrentPlayerIndex()
+    return this.gameState.players[myIndex]
+  }
+
+  public getOpponent(): any {
+    const myIndex = this.getCurrentPlayerIndex()
+    const opponentIndex = 1 - myIndex
+    return this.gameState.players[opponentIndex]
+  }
 }
