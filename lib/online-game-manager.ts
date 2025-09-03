@@ -275,6 +275,10 @@ export class OnlineGameManager {
     return this.currentPlayer
   }
 
+  getPlayerId(): string | null {
+    return this.currentPlayer?.id || null
+  }
+
   isPlayerOne(): boolean {
     if (!this.currentRoom || !this.currentPlayer) return false
     return this.currentRoom.player1_id === this.currentPlayer.id
