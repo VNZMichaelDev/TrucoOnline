@@ -40,6 +40,7 @@ export class RealtimeGameManager {
   private onPlayerJoined?: (player: Player) => void
   private onPlayerLeft?: () => void
   private onError?: (error: string) => void
+  private matchmakingActive = false
 
   async setCurrentUsername(username: string) {
     await this.supabase.rpc("set_config", {
@@ -93,9 +94,75 @@ export class RealtimeGameManager {
     this.startMatchmaking()
   }
 
+  async findMatch(username: string): Promise<{ opponentName: string; gameId: string } | null> {
+    try {
+      // Create or get player
+      await this.createOrGetPlayer(username)
+
+      // Join matchmaking
+      await this.joinMatchmaking()
+
+      // Wait for match (simulate for now, but this would be real-time)
+      return new Promise((resolve) => {
+        const checkMatch = async () => {
+          if (!this.matchmakingActive) {
+            resolve(null)
+            return
+          }
+
+          // Check if we have a room
+          if (this.currentRoom) {
+            // Get opponent info
+            const opponentId =
+              this.currentRoom.player1_id === this.currentPlayer?.id
+                ? this.currentRoom.player2_id
+                : this.currentRoom.player1_id
+
+            const { data: opponent } = await this.supabase
+              .from("players")
+              .select("username")
+              .eq("id", opponentId)
+              .single()
+
+            resolve({
+              opponentName: opponent?.username || "Oponente",
+              gameId: this.currentRoom.id,
+            })
+          } else {
+            // Keep checking
+            setTimeout(checkMatch, 1000)
+          }
+        }
+
+        this.matchmakingActive = true
+        checkMatch()
+      })
+    } catch (error) {
+      console.error("Error in findMatch:", error)
+      return null
+    }
+  }
+
+  async cancelMatchmaking(): Promise<void> {
+    this.matchmakingActive = false
+
+    if (this.currentPlayer) {
+      await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
+    }
+  }
+
+  async getOnlinePlayersCount(): Promise<number> {
+    const { count } = await this.supabase
+      .from("players")
+      .select("*", { count: "exact", head: true })
+      .gte("last_seen", new Date(Date.now() - 5 * 60 * 1000).toISOString()) // Last 5 minutes
+
+    return count || 0
+  }
+
   private async startMatchmaking() {
     const checkForMatch = async () => {
-      if (!this.currentPlayer) return
+      if (!this.currentPlayer || !this.matchmakingActive) return
 
       // Get all players in queue (excluding current player)
       const { data: queuedPlayers } = await this.supabase
@@ -113,7 +180,9 @@ export class RealtimeGameManager {
         await this.createGameRoom(opponent.player_id)
       } else {
         // Keep checking every 2 seconds
-        setTimeout(checkForMatch, 2000)
+        if (this.matchmakingActive) {
+          setTimeout(checkForMatch, 2000)
+        }
       }
     }
 
