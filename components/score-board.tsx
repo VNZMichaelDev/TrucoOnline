@@ -9,8 +9,9 @@ interface ScoreBoardProps {
 
 export default function ScoreBoard({ gameState }: ScoreBoardProps) {
   const playerScore = gameState.players[0].score
-  const botScore = gameState.players[1].score
+  const opponentScore = gameState.players[1].score
   const playerName = gameState.players[0].name
+  const opponentName = gameState.players[1].name
 
   return (
     <Card className="bg-black/70 border-amber-600">
@@ -22,8 +23,8 @@ export default function ScoreBoard({ gameState }: ScoreBoardProps) {
           </div>
           <div className="text-amber-400">-</div>
           <div className="text-center">
-            <div className="text-amber-200 font-medium">Bot</div>
-            <div className="text-amber-100 text-lg font-bold">{botScore}</div>
+            <div className="text-amber-200 font-medium">{opponentName}</div>
+            <div className="text-amber-100 text-lg font-bold">{opponentScore}</div>
           </div>
         </div>
 

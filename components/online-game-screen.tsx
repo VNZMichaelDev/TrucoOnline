@@ -360,7 +360,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
         <div className="flex items-center justify-center h-24 flex-shrink-0">
           <Card className="bg-black/70 border-amber-600 p-2 w-full max-w-xs">
             <CardContent className="p-0">
-              <TableDisplay playerCard={playerCard} botCard={opponentCard} />
+              <TableDisplay
+                playerCard={playerCard}
+                opponentCard={opponentCard}
+                playerName={playerName}
+                opponentName={opponentName}
+              />
             </CardContent>
           </Card>
         </div>
