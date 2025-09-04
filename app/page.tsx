@@ -20,18 +20,28 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("[v0] Login attempt started", { email })
+
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
     try {
+      console.log("[v0] Calling Supabase signInWithPassword")
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
-      if (error) throw error
+
+      if (error) {
+        console.log("[v0] Supabase auth error:", error)
+        throw error
+      }
+
+      console.log("[v0] Login successful, redirecting to /")
       router.push("/")
     } catch (error: unknown) {
+      console.log("[v0] Login error caught:", error)
       setError(error instanceof Error ? error.message : "An error occurred")
     } finally {
       setIsLoading(false)
@@ -39,13 +49,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-6 md:p-10 bg-cover bg-center bg-no-repeat"
-      style={{
-        backgroundImage:
-          "url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/fondomenuprincipal.jpg-Ga2pUnRel8thNe4kscmoDlG2Gd5pZJ.jpeg')",
-      }}
-    >
+    <div className="min-h-screen flex items-center justify-center p-6 md:p-10 bg-gradient-to-br from-amber-900 via-amber-800 to-amber-900">
       <div className="w-full max-w-sm">
         <Card className="bg-black/80 border-amber-600 shadow-2xl">
           <CardHeader className="text-center">
