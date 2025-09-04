@@ -34,6 +34,7 @@ export class OnlineGameManager {
   private isInMatchmaking = false
   private hasFoundOpponent = false
   private isGameStarted = false
+  private autoStartAttempted = false // Added flag to prevent multiple auto-start attempts
 
   async createOrGetPlayer(username: string, userId?: string): Promise<Player> {
     if (!userId) {
@@ -89,6 +90,7 @@ export class OnlineGameManager {
     this.isInMatchmaking = true
     this.hasFoundOpponent = false
     this.isGameStarted = false
+    this.autoStartAttempted = false // Reset auto-start flag
     this.statusCallback?.("Buscando oponente...")
 
     try {
@@ -134,6 +136,10 @@ export class OnlineGameManager {
         // Start listening for game updates
         this.subscribeToGameUpdates()
         this.startGameStatePolling()
+
+        if (this.isPlayerOne()) {
+          setTimeout(() => this.attemptAutoStart(), 500)
+        }
       } else {
         // No one waiting, join queue
         const { error } = await this.supabase.from("matchmaking_queue").insert({ player_id: this.currentPlayer.id })
@@ -155,6 +161,25 @@ export class OnlineGameManager {
       this.isInMatchmaking = false
       this.statusCallback?.("Error de conexión. Intenta de nuevo.")
       throw error
+    }
+  }
+
+  private async attemptAutoStart(): Promise<void> {
+    if (this.autoStartAttempted || this.isGameStarted || !this.currentRoom) return
+
+    this.autoStartAttempted = true
+    console.log("[v0] Attempting auto-start as player1")
+
+    try {
+      // Create initial game state
+      const OnlineTrucoEngine = (await import("@/lib/online-truco-engine")).OnlineTrucoEngine
+      const engine = new OnlineTrucoEngine("Jugador 1", "Jugador 2", this.currentPlayer!.id)
+      const initialState = engine.getSyncableState()
+
+      await this.startGame(initialState)
+    } catch (error) {
+      console.error("[v0] Error in auto-start:", error)
+      this.autoStartAttempted = false
     }
   }
 
@@ -189,11 +214,15 @@ export class OnlineGameManager {
             clearInterval(this.matchmakingInterval)
             this.matchmakingInterval = null
           }
+
+          if (this.isPlayerOne()) {
+            setTimeout(() => this.attemptAutoStart(), 500)
+          }
         }
       } catch (error) {
         console.error("[v0] Error in matchmaking polling:", error)
       }
-    }, 3000) // Increased interval to reduce server load
+    }, 2000) // Reduced interval for faster matching
   }
 
   private startGameStatePolling() {
@@ -232,7 +261,7 @@ export class OnlineGameManager {
       } catch (error) {
         console.error("[v0] Error in game state polling:", error)
       }
-    }, 1500) // Slightly faster polling for game state
+    }, 1000) // Faster polling for better responsiveness
   }
 
   private subscribeToMatchmaking() {
@@ -266,6 +295,8 @@ export class OnlineGameManager {
             clearInterval(this.matchmakingInterval)
             this.matchmakingInterval = null
           }
+
+          setTimeout(() => this.attemptAutoStart(), 500)
         },
       )
       .on(
@@ -399,7 +430,7 @@ export class OnlineGameManager {
     if (!this.currentRoom) throw new Error("No active room")
 
     if (!this.isPlayerOne()) {
-      console.log("[v0] Waiting for player1 to start the game")
+      console.log("[v0] Only player1 can start the game")
       return
     }
 
@@ -428,6 +459,8 @@ export class OnlineGameManager {
       this.currentRoom = { ...this.currentRoom, status: "playing", game_state: initialGameState }
       this.isGameStarted = true
       console.log("[v0] Game started successfully by player1")
+
+      this.gameStateCallback?.(initialGameState)
     } catch (error) {
       console.error("[v0] Failed to start game:", error)
       throw error
@@ -485,6 +518,7 @@ export class OnlineGameManager {
     this.isInMatchmaking = false
     this.hasFoundOpponent = false
     this.isGameStarted = false
+    this.autoStartAttempted = false // Reset auto-start flag
 
     if (this.realtimeChannel) {
       this.supabase.removeChannel(this.realtimeChannel)
