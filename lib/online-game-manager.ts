@@ -230,20 +230,25 @@ export class OnlineGameManager {
   async updateGameState(gameState: GameState): Promise<void> {
     if (!this.currentRoom) throw new Error("No active game")
 
-    const { error } = await this.supabase
-      .from("game_rooms")
-      .update({
-        game_state: gameState,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", this.currentRoom.id)
+    try {
+      const { error } = await this.supabase
+        .from("game_rooms")
+        .update({
+          game_state: gameState,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", this.currentRoom.id)
 
-    if (error) {
-      console.error("[v0] Error updating game state:", error)
-      throw error
+      if (error) {
+        console.error("[v0] Error updating game state:", error)
+        throw error
+      }
+
+      console.log("[v0] Game state updated successfully")
+    } catch (error) {
+      console.error("[v0] Failed to update game state:", error)
+      // Just log it and continue
     }
-
-    console.log("[v0] Game state updated successfully")
   }
 
   async leaveMatchmaking(): Promise<void> {
@@ -297,18 +302,23 @@ export class OnlineGameManager {
       return
     }
 
-    const { error } = await this.supabase
-      .from("game_rooms")
-      .update({
-        status: "playing",
-        game_state: initialGameState,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", this.currentRoom.id)
+    try {
+      const { error } = await this.supabase
+        .from("game_rooms")
+        .update({
+          status: "playing",
+          game_state: initialGameState,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", this.currentRoom.id)
 
-    if (error) throw error
+      if (error) throw error
 
-    this.currentRoom = { ...this.currentRoom, status: "playing", game_state: initialGameState }
+      this.currentRoom = { ...this.currentRoom, status: "playing", game_state: initialGameState }
+      console.log("[v0] Game started successfully by player1")
+    } catch (error) {
+      console.error("[v0] Failed to start game:", error)
+    }
   }
 
   async isGameReady(): Promise<boolean> {

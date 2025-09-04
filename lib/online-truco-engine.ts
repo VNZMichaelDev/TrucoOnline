@@ -14,24 +14,28 @@ export class OnlineTrucoEngine {
     const deck = createDeck()
     const [player1Hand, player2Hand] = dealCards(deck)
 
+    // In Truco, the "mano" deals but doesn't play first - the other player starts
+    const isPlayer1Mano = true // Player 1 is always "mano" in first hand
+    const startingPlayer = isPlayer1Mano ? 1 : 0 // The non-dealer starts
+
     return {
       players: [
         {
-          id: "player1", // Fixed ID for player 1
+          id: "player1",
           name: player1Name,
           hand: player1Hand,
           score: 0,
           isBot: false,
         },
         {
-          id: "player2", // Fixed ID for player 2
+          id: "player2",
           name: player2Name,
           hand: player2Hand,
           score: 0,
           isBot: false,
         },
       ],
-      currentPlayer: 0, // Index of whose turn it is (0 or 1)
+      currentPlayer: startingPlayer, // Start with non-dealer
       phase: "playing",
       table: [],
       bazas: [],
@@ -43,13 +47,10 @@ export class OnlineTrucoEngine {
       gamePoints: 0,
       handPoints: 1,
       currentBaza: 0,
-      lastWinner: 0,
+      lastWinner: startingPlayer,
       waitingForResponse: false,
-      currentPlayerId, // ID of the player using this device
-      playerMapping: {
-        [currentPlayerId]: 0, // This device's player is always mapped to index 0 for display
-        opponent: 1,
-      },
+      currentPlayerId,
+      mano: isPlayer1Mano ? 0 : 1, // Track who is "mano"
     }
   }
 
@@ -65,86 +66,63 @@ export class OnlineTrucoEngine {
       currentPlayerId,
     )
 
-    const myPlayerIndex = engine.getMyPlayerIndex(syncedState, currentPlayerId)
-    const opponentIndex = 1 - myPlayerIndex
+    const myGlobalIndex = engine.findPlayerIndex(syncedState, currentPlayerId)
+    const opponentGlobalIndex = 1 - myGlobalIndex
+
+    console.log("[v0] Syncing state - myGlobalIndex:", myGlobalIndex, "currentPlayer:", syncedState.currentPlayer)
 
     engine.gameState = {
       ...syncedState,
       currentPlayerId,
-      // Rearrange players so current player is always at index 0 for display
       players: [
         {
-          ...syncedState.players[myPlayerIndex],
-          hand: Array.isArray(syncedState.players[myPlayerIndex]?.hand) ? syncedState.players[myPlayerIndex].hand : [],
+          ...syncedState.players[myGlobalIndex],
+          hand: Array.isArray(syncedState.players[myGlobalIndex]?.hand) ? syncedState.players[myGlobalIndex].hand : [],
         },
         {
-          ...syncedState.players[opponentIndex],
-          hand: Array.isArray(syncedState.players[opponentIndex]?.hand) ? syncedState.players[opponentIndex].hand : [],
+          ...syncedState.players[opponentGlobalIndex],
+          hand: Array.isArray(syncedState.players[opponentGlobalIndex]?.hand)
+            ? syncedState.players[opponentGlobalIndex].hand
+            : [],
         },
       ],
-      currentPlayer: engine.mapGlobalToLocal(syncedState.currentPlayer, syncedState, currentPlayerId),
-      playerMapping: {
-        [currentPlayerId]: 0,
-        opponent: 1,
-      },
+      currentPlayer: syncedState.currentPlayer === myGlobalIndex ? 0 : 1,
     }
 
     return engine
   }
 
-  private getMyPlayerIndex(gameState: any, playerId: string): number {
+  private findPlayerIndex(gameState: any, playerId: string): number {
     if (!gameState.players) return 0
 
     // Try to find by ID first
     const indexById = gameState.players.findIndex((p: any) => p.id === playerId)
     if (indexById !== -1) return indexById
 
-    // Fallback: if this is the room creator, they're player 0
+    // Fallback: check if this player created the room (player1)
     return 0
   }
 
-  private mapGlobalToLocal(globalIndex: number, gameState: any, playerId: string): number {
-    const myGlobalIndex = this.getMyPlayerIndex(gameState, playerId)
-
-    if (globalIndex === myGlobalIndex) {
-      return 0 // My turn -> local index 0
-    } else {
-      return 1 // Opponent's turn -> local index 1
-    }
-  }
-
-  private mapLocalToGlobal(localIndex: number, gameState: any, playerId: string): number {
-    const myGlobalIndex = this.getMyPlayerIndex(gameState, playerId)
-
-    if (localIndex === 0) {
-      return myGlobalIndex // Local 0 -> my global index
-    } else {
-      return 1 - myGlobalIndex // Local 1 -> opponent's global index
-    }
-  }
-
   public getSyncableState(): any {
-    const myGlobalIndex = this.getMyPlayerIndex(this.gameState, this.myPlayerId)
+    const myGlobalIndex = this.findPlayerIndex(this.gameState, this.myPlayerId)
     const opponentGlobalIndex = 1 - myGlobalIndex
 
     const globalPlayers = [null, null]
     globalPlayers[myGlobalIndex] = {
-      ...this.gameState.players[0],
+      ...this.gameState.players[0], // My player (local index 0)
       id: this.myPlayerId,
     }
     globalPlayers[opponentGlobalIndex] = {
-      ...this.gameState.players[1],
-      id: "opponent",
-      hand: [], // Hide opponent's hand
+      ...this.gameState.players[1], // Opponent (local index 1)
+      id: myGlobalIndex === 0 ? "player2" : "player1",
+      hand: [], // Hide opponent's hand in sync
     }
 
     return {
       ...this.gameState,
       players: globalPlayers,
-      // Convert local currentPlayer back to global
-      currentPlayer: this.mapLocalToGlobal(this.gameState.currentPlayer, this.gameState, this.myPlayerId),
+      currentPlayer: this.gameState.currentPlayer === 0 ? myGlobalIndex : opponentGlobalIndex,
       currentPlayerId: undefined, // Remove device-specific data
-      playerMapping: undefined,
     }
   }
 
@@ -153,7 +131,9 @@ export class OnlineTrucoEngine {
   }
 
   public isMyTurn(): boolean {
-    return this.gameState.currentPlayer === 0
+    const isMyTurn = this.gameState.currentPlayer === 0
+    console.log("[v0] Checking if my turn:", isMyTurn, "currentPlayer:", this.gameState.currentPlayer)
+    return isMyTurn
   }
 
   public getBettingState(): BettingState {
@@ -180,7 +160,7 @@ export class OnlineTrucoEngine {
     const isResponse = action.type === "ACCEPT" || action.type === "REJECT"
 
     if (!isMyTurn && !isResponse) {
-      console.log("[v0] Not my turn, ignoring action:", action.type)
+      console.log("[v0] Not my turn, ignoring action:", action.type, "currentPlayer:", this.gameState.currentPlayer)
       return this.gameState
     }
 
@@ -220,14 +200,20 @@ export class OnlineTrucoEngine {
   }
 
   private playCard(cardIndex: number): GameState {
-    const currentPlayerIndex = this.gameState.currentPlayer
-    const currentPlayer = this.gameState.players[currentPlayerIndex]
+    if (!this.isMyTurn() || this.gameState.waitingForResponse) {
+      console.log("[v0] Cannot play card - not my turn or waiting for response")
+      return this.gameState
+    }
+
+    const currentPlayer = this.gameState.players[0] // My player is always at index 0
 
     if (cardIndex < 0 || cardIndex >= currentPlayer.hand.length) {
+      console.log("[v0] Invalid card index:", cardIndex)
       return this.gameState
     }
 
     const playedCard = currentPlayer.hand[cardIndex]
+    console.log("[v0] Playing card:", playedCard)
 
     // Remove card from hand
     currentPlayer.hand.splice(cardIndex, 1)
@@ -241,6 +227,7 @@ export class OnlineTrucoEngine {
     } else {
       // Switch to other player
       this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
+      console.log("[v0] Switched turn to player:", this.gameState.currentPlayer)
     }
 
     return this.gameState
@@ -254,13 +241,15 @@ export class OnlineTrucoEngine {
     let isDraw = false
 
     if (comparison > 0) {
-      winner = 1
+      winner = 1 // Second card wins (opponent)
     } else if (comparison < 0) {
-      winner = 0
+      winner = 0 // First card wins (me)
     } else {
       isDraw = true
       winner = this.gameState.lastWinner
     }
+
+    console.log("[v0] Baza resolved - winner:", winner, "cards:", this.gameState.table)
 
     this.gameState.bazas.push({
       winner,
@@ -274,40 +263,6 @@ export class OnlineTrucoEngine {
 
     if (this.isHandFinished()) {
       this.finishHand()
-    }
-  }
-
-  private isHandFinished(): boolean {
-    const bazaWins = [0, 0]
-    this.gameState.bazas.forEach((baza) => {
-      bazaWins[baza.winner]++
-    })
-    return bazaWins[0] >= 2 || bazaWins[1] >= 2 || this.gameState.bazas.length >= 3
-  }
-
-  private finishHand(): void {
-    const bazaWins = [0, 0]
-    this.gameState.bazas.forEach((baza) => {
-      bazaWins[baza.winner]++
-    })
-
-    const handWinner = bazaWins[0] > bazaWins[1] ? 0 : 1
-    let points = this.gameState.handPoints
-
-    if (this.gameState.trucoAccepted) {
-      points = this.getTrucoPoints()
-    }
-
-    if (this.gameState.envidoAccepted && this.gameState.envidoPoints > 0) {
-      points += this.getEnvidoPoints()
-    }
-
-    this.gameState.players[handWinner].score += points
-
-    if (this.gameState.players[handWinner].score >= 30) {
-      this.gameState.phase = "finished"
-    } else {
-      this.gameState.phase = "hand-result"
     }
   }
 
@@ -481,6 +436,9 @@ export class OnlineTrucoEngine {
     const deck = createDeck()
     const [player1Hand, player2Hand] = dealCards(deck)
 
+    const newMano = 1 - (this.gameState.mano || 0)
+    const startingPlayer = 1 - newMano // Non-dealer starts
+
     this.gameState.players[0].hand = player1Hand
     this.gameState.players[1].hand = player2Hand
     this.gameState.table = []
@@ -492,17 +450,21 @@ export class OnlineTrucoEngine {
     this.gameState.envidoPoints = 0
     this.gameState.handPoints = 1
     this.gameState.currentBaza = 0
-    this.gameState.currentPlayer = 0
+    this.gameState.currentPlayer = startingPlayer // Non-dealer starts
+    this.gameState.lastWinner = startingPlayer
     this.gameState.waitingForResponse = false
     this.gameState.pendingAction = undefined
     this.gameState.phase = "playing"
+    this.gameState.mano = newMano // Update who is "mano"
+
+    console.log("[v0] New hand started - mano:", newMano, "starting player:", startingPlayer)
 
     return this.gameState
   }
 
   public canPlayCard(cardIndex: number): boolean {
     const isMyTurn = this.isMyTurn()
-    const myPlayer = this.gameState.players[0] // My player is always at index 0
+    const myPlayer = this.gameState.players[0]
 
     if (!myPlayer || !Array.isArray(myPlayer.hand)) {
       console.log("[v0] Invalid player or hand for card play")
@@ -516,7 +478,7 @@ export class OnlineTrucoEngine {
       cardIndex < myPlayer.hand.length &&
       this.gameState.phase === "playing"
 
-    console.log("[v0] Can play card:", canPlay, "isMyTurn:", isMyTurn, "cardIndex:", cardIndex)
+    console.log("[v0] Can play card:", canPlay, "isMyTurn:", isMyTurn, "waiting:", this.gameState.waitingForResponse)
     return canPlay
   }
 
