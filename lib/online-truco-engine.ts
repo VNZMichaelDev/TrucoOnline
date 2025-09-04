@@ -3,8 +3,10 @@ import { createDeck, dealCards, compareCards, calculateEnvido } from "./cards"
 
 export class OnlineTrucoEngine {
   private gameState: GameState
+  private myPlayerId: string
 
   constructor(player1Name: string, player2Name: string, currentPlayerId: string) {
+    this.myPlayerId = currentPlayerId
     this.gameState = this.initializeGame(player1Name, player2Name, currentPlayerId)
   }
 
@@ -15,14 +17,14 @@ export class OnlineTrucoEngine {
     return {
       players: [
         {
-          id: currentPlayerId, // This device's player
+          id: "player1", // Fixed ID for player 1
           name: player1Name,
           hand: player1Hand,
           score: 0,
           isBot: false,
         },
         {
-          id: "opponent", // The other player
+          id: "player2", // Fixed ID for player 2
           name: player2Name,
           hand: player2Hand,
           score: 0,
@@ -44,6 +46,10 @@ export class OnlineTrucoEngine {
       lastWinner: 0,
       waitingForResponse: false,
       currentPlayerId, // ID of the player using this device
+      playerMapping: {
+        [currentPlayerId]: 0, // This device's player is always mapped to index 0 for display
+        opponent: 1,
+      },
     }
   }
 
@@ -59,58 +65,86 @@ export class OnlineTrucoEngine {
       currentPlayerId,
     )
 
+    const myPlayerIndex = engine.getMyPlayerIndex(syncedState, currentPlayerId)
+    const opponentIndex = 1 - myPlayerIndex
+
     engine.gameState = {
-      ...engine.gameState,
       ...syncedState,
       currentPlayerId,
-      // Ensure the first player is always the current device's player
+      // Rearrange players so current player is always at index 0 for display
       players: [
         {
-          ...syncedState.players[0],
-          id: currentPlayerId, // This device's player
-          hand: Array.isArray(syncedState.players[0].hand) ? syncedState.players[0].hand : [],
+          ...syncedState.players[myPlayerIndex],
+          hand: Array.isArray(syncedState.players[myPlayerIndex]?.hand) ? syncedState.players[myPlayerIndex].hand : [],
         },
         {
-          ...syncedState.players[1],
-          id: "opponent", // The other player
-          hand: Array.isArray(syncedState.players[1].hand) ? syncedState.players[1].hand : [],
+          ...syncedState.players[opponentIndex],
+          hand: Array.isArray(syncedState.players[opponentIndex]?.hand) ? syncedState.players[opponentIndex].hand : [],
         },
       ],
+      currentPlayer: engine.mapGlobalToLocal(syncedState.currentPlayer, syncedState, currentPlayerId),
+      playerMapping: {
+        [currentPlayerId]: 0,
+        opponent: 1,
+      },
     }
 
     return engine
   }
 
-  public getSyncableState(): any {
-    const currentPlayerIndex = this.getCurrentPlayerIndex()
-    const opponentIndex = 1 - currentPlayerIndex
+  private getMyPlayerIndex(gameState: any, playerId: string): number {
+    if (!gameState.players) return 0
 
-    if (!this.gameState.players || this.gameState.players.length !== 2) {
-      console.log("[v0] Invalid game state for sync")
-      return this.gameState
+    // Try to find by ID first
+    const indexById = gameState.players.findIndex((p: any) => p.id === playerId)
+    if (indexById !== -1) return indexById
+
+    // Fallback: if this is the room creator, they're player 0
+    return 0
+  }
+
+  private mapGlobalToLocal(globalIndex: number, gameState: any, playerId: string): number {
+    const myGlobalIndex = this.getMyPlayerIndex(gameState, playerId)
+
+    if (globalIndex === myGlobalIndex) {
+      return 0 // My turn -> local index 0
+    } else {
+      return 1 // Opponent's turn -> local index 1
+    }
+  }
+
+  private mapLocalToGlobal(localIndex: number, gameState: any, playerId: string): number {
+    const myGlobalIndex = this.getMyPlayerIndex(gameState, playerId)
+
+    if (localIndex === 0) {
+      return myGlobalIndex // Local 0 -> my global index
+    } else {
+      return 1 - myGlobalIndex // Local 1 -> opponent's global index
+    }
+  }
+
+  public getSyncableState(): any {
+    const myGlobalIndex = this.getMyPlayerIndex(this.gameState, this.myPlayerId)
+    const opponentGlobalIndex = 1 - myGlobalIndex
+
+    const globalPlayers = [null, null]
+    globalPlayers[myGlobalIndex] = {
+      ...this.gameState.players[0],
+      id: this.myPlayerId,
+    }
+    globalPlayers[opponentGlobalIndex] = {
+      ...this.gameState.players[1],
+      id: "opponent",
+      hand: [], // Hide opponent's hand
     }
 
     return {
       ...this.gameState,
-      players: this.gameState.players.map((player, index) => {
-        // Ensure player object is valid
-        if (!player) {
-          console.log("[v0] Invalid player at index", index)
-          return {
-            id: index === 0 ? this.gameState.currentPlayerId : "opponent",
-            name: index === 0 ? "Player 1" : "Player 2",
-            hand: [],
-            score: 0,
-            isBot: false,
-          }
-        }
-
-        return {
-          ...player,
-          // Hide opponent's hand for security, but keep structure
-          hand: index === opponentIndex ? [] : Array.isArray(player.hand) ? player.hand : [],
-        }
-      }),
+      players: globalPlayers,
+      // Convert local currentPlayer back to global
+      currentPlayer: this.mapLocalToGlobal(this.gameState.currentPlayer, this.gameState, this.myPlayerId),
+      currentPlayerId: undefined, // Remove device-specific data
+      playerMapping: undefined,
     }
   }
 
@@ -118,12 +152,8 @@ export class OnlineTrucoEngine {
     return { ...this.gameState }
   }
 
-  private getCurrentPlayerIndex(): number {
-    return 0 // This device's player is always at index 0
-  }
-
   public isMyTurn(): boolean {
-    return this.gameState.currentPlayer === 0 // 0 means it's this device's turn
+    return this.gameState.currentPlayer === 0
   }
 
   public getBettingState(): BettingState {
@@ -150,12 +180,16 @@ export class OnlineTrucoEngine {
     const isResponse = action.type === "ACCEPT" || action.type === "REJECT"
 
     if (!isMyTurn && !isResponse) {
+      console.log("[v0] Not my turn, ignoring action:", action.type)
       return this.gameState
     }
 
     if (isResponse && isMyTurn) {
-      return this.gameState // Can't respond to own bet
+      console.log("[v0] Cannot respond to own bet")
+      return this.gameState
     }
+
+    console.log("[v0] Processing action:", action.type, "isMyTurn:", isMyTurn)
 
     switch (action.type) {
       case "PLAY_CARD":
@@ -468,52 +502,53 @@ export class OnlineTrucoEngine {
 
   public canPlayCard(cardIndex: number): boolean {
     const isMyTurn = this.isMyTurn()
-    const myIndex = this.getCurrentPlayerIndex()
-    const myPlayer = this.gameState.players[myIndex]
+    const myPlayer = this.gameState.players[0] // My player is always at index 0
 
     if (!myPlayer || !Array.isArray(myPlayer.hand)) {
       console.log("[v0] Invalid player or hand for card play")
       return false
     }
 
-    return (
+    const canPlay =
       isMyTurn &&
       !this.gameState.waitingForResponse &&
       cardIndex >= 0 &&
       cardIndex < myPlayer.hand.length &&
       this.gameState.phase === "playing"
-    )
+
+    console.log("[v0] Can play card:", canPlay, "isMyTurn:", isMyTurn, "cardIndex:", cardIndex)
+    return canPlay
   }
 
   public getPlayerId(): string {
-    return this.gameState.currentPlayerId
+    return this.myPlayerId
+  }
+
+  public getCurrentPlayerIndex(): number {
+    return 0 // Always return 0 for display purposes (my player)
   }
 
   public getCurrentPlayer(): any {
-    if (!this.gameState.players || !this.gameState.players[0]) {
-      console.log("[v0] Current player not found")
-      return {
-        id: this.gameState.currentPlayerId,
+    return (
+      this.gameState.players[0] || {
+        id: this.myPlayerId,
         name: "Unknown Player",
         hand: [],
         score: 0,
         isBot: false,
       }
-    }
-    return this.gameState.players[0]
+    )
   }
 
   public getOpponent(): any {
-    if (!this.gameState.players || !this.gameState.players[1]) {
-      console.log("[v0] Opponent not found")
-      return {
+    return (
+      this.gameState.players[1] || {
         id: "opponent",
         name: "Unknown Player",
         hand: [],
         score: 0,
         isBot: false,
       }
-    }
-    return this.gameState.players[1]
+    )
   }
 }

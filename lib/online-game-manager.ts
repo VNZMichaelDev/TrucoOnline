@@ -238,7 +238,12 @@ export class OnlineGameManager {
       })
       .eq("id", this.currentRoom.id)
 
-    if (error) throw error
+    if (error) {
+      console.error("[v0] Error updating game state:", error)
+      throw error
+    }
+
+    console.log("[v0] Game state updated successfully")
   }
 
   async leaveMatchmaking(): Promise<void> {
@@ -286,6 +291,11 @@ export class OnlineGameManager {
 
   async startGame(initialGameState: GameState): Promise<void> {
     if (!this.currentRoom) throw new Error("No active room")
+
+    if (!this.isPlayerOne()) {
+      console.log("[v0] Waiting for player1 to start the game")
+      return
+    }
 
     const { error } = await this.supabase
       .from("game_rooms")
