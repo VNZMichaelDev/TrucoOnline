@@ -77,13 +77,10 @@ export class OnlineTrucoEngine {
       syncedState.players.map((p) => ({ id: p.id, name: p.name })),
     )
 
-    const localCurrentPlayer = syncedState.currentPlayer === myGlobalIndex ? 0 : 1
-    console.log("[v0] Mapped to localCurrentPlayer:", localCurrentPlayer)
-    console.log("[v0] This means isMyTurn will be:", localCurrentPlayer === 0)
-
     engine.gameState = {
       ...syncedState,
       currentPlayerId,
+      myGlobalIndex, // Store my global index for turn calculation
       players: [
         {
           ...syncedState.players[myGlobalIndex],
@@ -96,10 +93,12 @@ export class OnlineTrucoEngine {
             : [],
         },
       ],
-      currentPlayer: localCurrentPlayer,
+      // Keep the global currentPlayer for turn calculation
+      currentPlayer: syncedState.currentPlayer,
     }
 
-    console.log("[v0] Final local state - currentPlayer:", engine.gameState.currentPlayer)
+    console.log("[v0] Final state - globalCurrentPlayer:", engine.gameState.currentPlayer)
+    console.log("[v0] My global index:", engine.gameState.myGlobalIndex)
     console.log("[v0] === END SYNC DEBUG ===")
 
     return engine
@@ -118,34 +117,16 @@ export class OnlineTrucoEngine {
     }
 
     // Try to find by name match
-    let indexByName = gameState.players.findIndex((p: any) => p.name === playerId)
+    const indexByName = gameState.players.findIndex((p: any) => p.name === playerId)
     if (indexByName !== -1) {
       console.log("[v0] Found by name at index:", indexByName)
       return indexByName
     }
 
-    // Try partial name match (in case of truncation)
-    indexByName = gameState.players.findIndex(
-      (p: any) => p.name && playerId && (p.name.includes(playerId) || playerId.includes(p.name)),
-    )
-    if (indexByName !== -1) {
-      console.log("[v0] Found by partial name match at index:", indexByName)
-      return indexByName
-    }
-
-    if (playerId.includes("player1") || playerId.includes("Player 1") || playerId.endsWith("1")) {
-      console.log("[v0] Fallback to player1 (index 0)")
-      return 0
-    }
-    if (playerId.includes("player2") || playerId.includes("Player 2") || playerId.endsWith("2")) {
-      console.log("[v0] Fallback to player2 (index 1)")
-      return 1
-    }
-
-    // Final fallback: use first character or hash of playerId
+    // Use a consistent hash-based approach for unknown players
     const hash = playerId.split("").reduce((a, b) => a + b.charCodeAt(0), 0)
     const index = hash % 2
-    console.log("[v0] Hash-based fallback to index:", index)
+    console.log("[v0] Hash-based assignment to index:", index, "for playerId:", playerId)
     return index
   }
 
@@ -164,18 +145,16 @@ export class OnlineTrucoEngine {
       hand: [], // Hide opponent's hand in sync
     }
 
-    const globalCurrentPlayer = this.gameState.currentPlayer === 0 ? myGlobalIndex : opponentGlobalIndex
-
     console.log("[v0] === SYNC OUT DEBUG ===")
     console.log("[v0] localCurrentPlayer:", this.gameState.currentPlayer)
     console.log("[v0] myGlobalIndex:", myGlobalIndex)
-    console.log("[v0] Converting to globalCurrentPlayer:", globalCurrentPlayer)
+    console.log("[v0] Converting to globalCurrentPlayer:", myGlobalIndex)
     console.log("[v0] === END SYNC OUT DEBUG ===")
 
     return {
       ...this.gameState,
       players: globalPlayers,
-      currentPlayer: globalCurrentPlayer,
+      currentPlayer: myGlobalIndex, // Keep global current player
       currentPlayerId: undefined, // Remove device-specific data
     }
   }
@@ -185,8 +164,16 @@ export class OnlineTrucoEngine {
   }
 
   public isMyTurn(): boolean {
-    const isMyTurn = this.gameState.currentPlayer === 0
-    console.log("[v0] Checking if my turn:", isMyTurn, "currentPlayer:", this.gameState.currentPlayer)
+    const myGlobalIndex = this.gameState.myGlobalIndex ?? 0
+    const isMyTurn = this.gameState.currentPlayer === myGlobalIndex
+    console.log(
+      "[v0] Turn check - globalCurrentPlayer:",
+      this.gameState.currentPlayer,
+      "myGlobalIndex:",
+      myGlobalIndex,
+      "isMyTurn:",
+      isMyTurn,
+    )
     return isMyTurn
   }
 
@@ -279,9 +266,9 @@ export class OnlineTrucoEngine {
     if (this.gameState.table.length === 2) {
       this.resolveBaza()
     } else {
-      // Switch to other player
-      this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
-      console.log("[v0] Switched turn to player:", this.gameState.currentPlayer)
+      const myGlobalIndex = this.gameState.myGlobalIndex ?? 0
+      this.gameState.currentPlayer = 1 - myGlobalIndex
+      console.log("[v0] Switched turn to global player:", this.gameState.currentPlayer)
     }
 
     return this.gameState
