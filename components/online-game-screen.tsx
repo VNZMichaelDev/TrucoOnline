@@ -28,13 +28,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | undefined>()
   const [message, setMessage] = useState<string>("")
-  const [status, setStatus] = useState<string>("")
+  const [status, setStatus] = useState<string>("Buscando oponente...")
   const [isConnected, setIsConnected] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [canStartGame, setCanStartGame] = useState(false)
   const [opponentName, setOpponentName] = useState<string>("Oponente")
   const [isPlayerInitialized, setIsPlayerInitialized] = useState(false)
-  const [hasStartedMatchmaking, setHasStartedMatchmaking] = useState(false)
+  const [autoStartAttempted, setAutoStartAttempted] = useState(false)
 
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
 
@@ -59,6 +58,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   const initializeOnlineGame = async () => {
     try {
       console.log("[v0] Initializing online game for:", playerName, "user:", user?.id)
+      setStatus("Conectando...")
 
       await gameManager.createOrGetPlayer(playerName, user?.id)
       setIsPlayerInitialized(true)
@@ -66,13 +66,9 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       gameManager.setStatusCallback((newStatus) => {
         console.log("[v0] Status update:", newStatus)
         setStatus(newStatus)
-
-        if (newStatus.includes("encontrado") && !canStartGame) {
-          setCanStartGame(true)
-        }
       })
 
-      gameManager.setGameStateCallback((newGameState) => {
+      gameManager.setGameStateCallback(async (newGameState) => {
         console.log("[v0] Received game state update:", newGameState)
 
         if (newGameState && newGameState.players && isPlayerInitialized) {
@@ -80,9 +76,9 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
 
           let opponent = null
           if (gameManager.isPlayerOne()) {
-            opponent = newGameState.players[1] // I'm player1, opponent is player2
+            opponent = newGameState.players[1]
           } else {
-            opponent = newGameState.players[0] // I'm player2, opponent is player1
+            opponent = newGameState.players[0]
           }
 
           if (opponent) {
@@ -94,17 +90,18 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             setGameEngine(updatedEngine)
             setGameState(updatedEngine.getGameState())
 
-            setCanStartGame(false)
+            if (newGameState.status === "waiting" && !autoStartAttempted && gameManager.isPlayerOne()) {
+              setAutoStartAttempted(true)
+              setTimeout(() => autoStartGame(), 1000)
+            }
           }
         }
       })
 
       setIsConnected(true)
+      setStatus("Buscando oponente...")
 
-      if (!hasStartedMatchmaking) {
-        setHasStartedMatchmaking(true)
-        await gameManager.joinMatchmaking()
-      }
+      await gameManager.joinMatchmaking()
     } catch (error) {
       console.error("[v0] Error initializing online game:", error)
       setStatus("Error de conexión. Verifica tu autenticación.")
@@ -112,40 +109,24 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     }
   }
 
-  const startGame = async () => {
-    console.log("[v0] Starting new game")
-    setIsProcessing(true)
+  const autoStartGame = async () => {
+    console.log("[v0] Auto-starting game")
+    setStatus("¡Oponente encontrado! Iniciando partida...")
 
     try {
-      if (!isPlayerInitialized) {
-        throw new Error("Player not initialized")
-      }
+      const myPlayerId = gameManager.getPlayerId()
+      if (!myPlayerId) throw new Error("Player ID not found")
 
-      const isReady = await gameManager.isGameReady()
+      const engine = new OnlineTrucoEngine(playerName, opponentName, myPlayerId)
+      const initialState = engine.getSyncableState()
 
-      if (isReady) {
-        setStatus("Sincronizando partida...")
-      } else {
-        // Solo player1 puede inicializar el juego
-        if (gameManager.isPlayerOne()) {
-          const myPlayerId = gameManager.getPlayerId()
-          const engine = new OnlineTrucoEngine(playerName, opponentName, myPlayerId!)
-          const initialState = engine.getSyncableState()
-
-          console.log("[v0] Player1 initializing game with state:", initialState)
-          await gameManager.startGame(initialState)
-          setStatus("¡Partida iniciada!")
-          setCanStartGame(false)
-        } else {
-          // Player2 no debería llegar aquí, pero por seguridad
-          setStatus("Esperando que el oponente inicie la partida...")
-        }
-      }
+      console.log("[v0] Auto-initializing game with state:", initialState)
+      await gameManager.startGame(initialState)
+      setStatus("¡Partida iniciada!")
     } catch (error) {
-      console.error("[v0] Error starting game:", error)
-      setStatus("Error al iniciar partida")
-    } finally {
-      setIsProcessing(false)
+      console.error("[v0] Error auto-starting game:", error)
+      setStatus("Error al iniciar partida automáticamente")
+      setAutoStartAttempted(false)
     }
   }
 
@@ -283,10 +264,6 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     }
   }
 
-  const handleNewGame = () => {
-    startGame()
-  }
-
   const handleBackToMenu = async () => {
     await gameManager.leaveMatchmaking()
     onBackToMenu()
@@ -314,40 +291,18 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             <div className="space-y-4">
               <div className="text-amber-100">
                 <p className="text-lg">¡Hola {playerName}!</p>
-                <p className="text-sm mt-2">{status || "Conectando..."}</p>
+                <p className="text-sm mt-2">{status}</p>
                 {opponentName !== "Oponente" && <p className="text-sm text-green-400 mt-1">Oponente: {opponentName}</p>}
               </div>
 
-              {status.includes("Esperando") && (
-                <div className="animate-pulse">
-                  <div className="h-2 bg-amber-600 rounded-full"></div>
-                </div>
-              )}
-
-              {canStartGame && !isProcessing && gameManager.isPlayerOne() && !gameState && (
-                <Button
-                  onClick={startGame}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12"
-                  disabled={isProcessing}
-                >
-                  ¡Comenzar Partida!
-                </Button>
-              )}
-
-              {canStartGame && !isProcessing && !gameManager.isPlayerOne() && !gameState && (
-                <div className="text-amber-200 text-center">
-                  <p className="text-sm">Esperando que {opponentName} inicie la partida...</p>
-                  <div className="animate-pulse mt-2">
-                    <div className="h-2 bg-green-600 rounded-full"></div>
-                  </div>
-                </div>
-              )}
+              <div className="animate-pulse">
+                <div className="h-2 bg-amber-600 rounded-full"></div>
+              </div>
 
               <Button
                 onClick={handleBackToMenu}
                 variant="outline"
                 className="w-full border-2 border-amber-600 text-amber-200 hover:bg-amber-600/20 font-bold h-12 bg-transparent"
-                disabled={isProcessing}
               >
                 Cancelar
               </Button>
@@ -473,10 +428,10 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
 
             {gameState.phase === "finished" && (
               <Button
-                onClick={handleNewGame}
+                onClick={handleBackToMenu}
                 className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-10 text-sm rounded-lg"
               >
-                Nueva Partida
+                Volver al Menú
               </Button>
             )}
           </div>
