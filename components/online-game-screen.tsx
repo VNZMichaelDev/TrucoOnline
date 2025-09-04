@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react"
+import type { User } from "@supabase/supabase-js"
 import { OnlineTrucoEngine } from "@/lib/online-truco-engine"
 import { OnlineGameManager } from "@/lib/online-game-manager"
 import { useAudio } from "@/hooks/use-audio"
@@ -18,9 +19,10 @@ import type { GameState, GameAction } from "@/lib/types"
 interface OnlineGameScreenProps {
   playerName: string
   onBackToMenu: () => void
+  user: User | null // Added user prop for authentication
 }
 
-export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGameScreenProps) {
+export default function OnlineGameScreen({ playerName, onBackToMenu, user }: OnlineGameScreenProps) {
   const [gameManager] = useState(() => new OnlineGameManager())
   const [gameEngine, setGameEngine] = useState<OnlineTrucoEngine | null>(null)
   const [gameState, setGameState] = useState<GameState | null>(null)
@@ -36,6 +38,14 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
 
   useEffect(() => {
+    if (!user) {
+      setStatus("Error de autenticación. Redirigiendo...")
+      setTimeout(() => {
+        window.location.href = "/auth/login"
+      }, 2000)
+      return
+    }
+
     initializeOnlineGame()
     startBackgroundMusic()
 
@@ -43,13 +53,13 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
       stopBackgroundMusic()
       gameManager.cleanup()
     }
-  }, [])
+  }, [user])
 
   const initializeOnlineGame = async () => {
     try {
-      console.log("[v0] Initializing online game for:", playerName)
+      console.log("[v0] Initializing online game for:", playerName, "user:", user?.id)
 
-      await gameManager.createOrGetPlayer(playerName)
+      await gameManager.createOrGetPlayer(playerName, user?.id)
       setIsPlayerInitialized(true)
 
       gameManager.setStatusCallback((newStatus) => {
@@ -90,7 +100,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
       await gameManager.joinMatchmaking()
     } catch (error) {
       console.error("[v0] Error initializing online game:", error)
-      setStatus("Error de conexión. Intenta de nuevo.")
+      setStatus("Error de conexión. Verifica tu autenticación.")
       setIsConnected(false)
     }
   }
