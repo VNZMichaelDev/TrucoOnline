@@ -136,6 +136,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu }: OnlineGam
     setIsProcessing(true)
 
     try {
+      if (!gameEngine.isMyTurn() && action.type !== "ACCEPT" && action.type !== "REJECT") {
+        console.log("[v0] Not my turn, cannot perform action:", action.type)
+        setMessage("No es tu turno")
+        return
+      }
+
       const newState = gameEngine.processAction(action)
       setGameState(newState)
       setSelectedCardIndex(undefined)
