@@ -4,6 +4,7 @@ import type { GameState, GameAction } from "@/lib/types"
 export interface Player {
   id: string
   username: string
+  user_id: string // Added user_id for authentication linking
   created_at: string
   last_seen: string
   games_played: number
@@ -31,15 +32,22 @@ export class OnlineGameManager {
   private gameStateInterval: NodeJS.Timeout | null = null
   private realtimeChannel: any = null
 
-  async createOrGetPlayer(username: string): Promise<Player> {
-    // First try to get existing player
-    const { data: existingPlayer } = await this.supabase.from("players").select("*").eq("username", username).single()
+  async createOrGetPlayer(username: string, userId?: string): Promise<Player> {
+    if (!userId) {
+      throw new Error("User ID is required for authentication")
+    }
+
+    // First try to get existing player by user_id
+    const { data: existingPlayer } = await this.supabase.from("players").select("*").eq("user_id", userId).single()
 
     if (existingPlayer) {
-      // Update last_seen
+      // Update last_seen and username if changed
       const { data: updatedPlayer } = await this.supabase
         .from("players")
-        .update({ last_seen: new Date().toISOString() })
+        .update({
+          last_seen: new Date().toISOString(),
+          username: username, // Update username in case it changed
+        })
         .eq("id", existingPlayer.id)
         .select()
         .single()
@@ -48,10 +56,20 @@ export class OnlineGameManager {
       return updatedPlayer
     }
 
-    // Create new player
-    const { data: newPlayer, error } = await this.supabase.from("players").insert({ username }).select().single()
+    // Create new player with user_id
+    const { data: newPlayer, error } = await this.supabase
+      .from("players")
+      .insert({
+        username,
+        user_id: userId,
+      })
+      .select()
+      .single()
 
-    if (error) throw error
+    if (error) {
+      console.error("[v0] Error creating player:", error)
+      throw error
+    }
 
     this.currentPlayer = newPlayer
     return newPlayer
@@ -62,51 +80,65 @@ export class OnlineGameManager {
 
     this.statusCallback?.("Buscando oponente...")
 
-    // Remove from queue if already there
-    await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
+    try {
+      // Remove from queue if already there
+      await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
 
-    // Check if there's someone waiting
-    const { data: waitingPlayers } = await this.supabase
-      .from("matchmaking_queue")
-      .select("*")
-      .order("created_at", { ascending: true })
-      .limit(1)
+      // Check if there's someone waiting
+      const { data: waitingPlayers } = await this.supabase
+        .from("matchmaking_queue")
+        .select("*")
+        .order("created_at", { ascending: true })
+        .limit(1)
 
-    if (waitingPlayers && waitingPlayers.length > 0) {
-      // Match found! Create game room
-      const opponent = waitingPlayers[0]
+      if (waitingPlayers && waitingPlayers.length > 0) {
+        // Match found! Create game room
+        const opponent = waitingPlayers[0]
 
-      // Remove opponent from queue
-      await this.supabase.from("matchmaking_queue").delete().eq("id", opponent.id)
+        // Remove opponent from queue
+        await this.supabase.from("matchmaking_queue").delete().eq("id", opponent.id)
 
-      // Create game room
-      const { data: room, error } = await this.supabase
-        .from("game_rooms")
-        .insert({
-          player1_id: opponent.player_id,
-          player2_id: this.currentPlayer.id,
-          status: "waiting",
-        })
-        .select()
-        .single()
+        // Create game room
+        const { data: room, error } = await this.supabase
+          .from("game_rooms")
+          .insert({
+            player1_id: opponent.player_id,
+            player2_id: this.currentPlayer.id,
+            status: "waiting",
+          })
+          .select()
+          .single()
 
-      if (error) throw error
+        if (error) {
+          console.error("[v0] Error creating game room:", error)
+          throw error
+        }
 
-      this.currentRoom = room
-      this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
+        this.currentRoom = room
+        this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
 
-      // Start listening for game updates
-      this.subscribeToGameUpdates()
-      this.startGameStatePolling()
-    } else {
-      // No one waiting, join queue
-      await this.supabase.from("matchmaking_queue").insert({ player_id: this.currentPlayer.id })
+        // Start listening for game updates
+        this.subscribeToGameUpdates()
+        this.startGameStatePolling()
+      } else {
+        // No one waiting, join queue
+        const { error } = await this.supabase.from("matchmaking_queue").insert({ player_id: this.currentPlayer.id })
 
-      this.statusCallback?.("Esperando oponente...")
+        if (error) {
+          console.error("[v0] Error joining matchmaking queue:", error)
+          throw error
+        }
 
-      // Listen for matchmaking updates
-      this.subscribeToMatchmaking()
-      this.startMatchmakingPolling()
+        this.statusCallback?.("Esperando oponente...")
+
+        // Listen for matchmaking updates
+        this.subscribeToMatchmaking()
+        this.startMatchmakingPolling()
+      }
+    } catch (error) {
+      console.error("[v0] Error in joinMatchmaking:", error)
+      this.statusCallback?.("Error de conexión. Intenta de nuevo.")
+      throw error
     }
   }
 
@@ -232,17 +264,23 @@ export class OnlineGameManager {
   async makeMove(action: GameAction): Promise<void> {
     if (!this.currentRoom || !this.currentPlayer) throw new Error("No active game")
 
-    // Record the move
-    await this.supabase.from("game_moves").insert({
-      room_id: this.currentRoom.id,
-      player_id: this.currentPlayer.id,
-      move_type: action.type,
-      move_data: action,
-    })
+    try {
+      // Record the move
+      const { error } = await this.supabase.from("game_moves").insert({
+        room_id: this.currentRoom.id,
+        player_id: this.currentPlayer.id,
+        move_type: action.type,
+        move_data: action,
+      })
 
-    // This would typically update the game state
-    // For now, we'll let the game engine handle it locally
-    // and sync the state
+      if (error) {
+        console.error("[v0] Error recording move:", error)
+        throw error
+      }
+    } catch (error) {
+      console.error("[v0] Failed to record move:", error)
+      // Don't throw here to avoid breaking game flow
+    }
   }
 
   async updateGameState(gameState: GameState): Promise<void> {
@@ -274,7 +312,11 @@ export class OnlineGameManager {
   async leaveMatchmaking(): Promise<void> {
     if (!this.currentPlayer) return
 
-    await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
+    try {
+      await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
+    } catch (error) {
+      console.error("[v0] Error leaving matchmaking:", error)
+    }
 
     if (this.matchmakingInterval) {
       clearInterval(this.matchmakingInterval)
@@ -334,7 +376,10 @@ export class OnlineGameManager {
         })
         .eq("id", this.currentRoom.id)
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error starting game:", error)
+        throw error
+      }
 
       this.currentRoom = { ...this.currentRoom, status: "playing", game_state: initialGameState }
       console.log("[v0] Game started successfully by player1")
@@ -347,9 +392,14 @@ export class OnlineGameManager {
   async isGameReady(): Promise<boolean> {
     if (!this.currentRoom) return false
 
-    const { data: room } = await this.supabase.from("game_rooms").select("*").eq("id", this.currentRoom.id).single()
+    try {
+      const { data: room } = await this.supabase.from("game_rooms").select("*").eq("id", this.currentRoom.id).single()
 
-    return room?.status === "playing" && room?.game_state !== null
+      return room?.status === "playing" && room?.game_state !== null
+    } catch (error) {
+      console.error("[v0] Error checking if game is ready:", error)
+      return false
+    }
   }
 
   private subscribeToGameUpdates() {
