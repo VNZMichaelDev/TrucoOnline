@@ -14,9 +14,8 @@ export class OnlineTrucoEngine {
     const deck = createDeck()
     const [player1Hand, player2Hand] = dealCards(deck)
 
-    // In Truco, the "mano" deals but doesn't play first - the other player starts
     const isPlayer1Mano = true // Player 1 is always "mano" in first hand
-    const startingPlayer = isPlayer1Mano ? 1 : 0 // The non-dealer starts
+    const startingPlayer = 1 // Player 2 (non-dealer) starts according to Truco rules
 
     return {
       players: [
@@ -35,7 +34,7 @@ export class OnlineTrucoEngine {
           isBot: false,
         },
       ],
-      currentPlayer: startingPlayer, // Start with non-dealer
+      currentPlayer: startingPlayer, // Start with player 2 (non-dealer)
       phase: "playing",
       table: [],
       bazas: [],
@@ -50,7 +49,7 @@ export class OnlineTrucoEngine {
       lastWinner: startingPlayer,
       waitingForResponse: false,
       currentPlayerId,
-      mano: isPlayer1Mano ? 0 : 1, // Track who is "mano"
+      mano: 0, // Player 1 is "mano" (dealer)
     }
   }
 
@@ -66,7 +65,7 @@ export class OnlineTrucoEngine {
       currentPlayerId,
     )
 
-    const myGlobalIndex = engine.findPlayerIndex(syncedState, currentPlayerId)
+    const myGlobalIndex = engine.findPlayerGlobalIndex(syncedState, currentPlayerId)
     const opponentGlobalIndex = 1 - myGlobalIndex
 
     console.log("[v0] Syncing state - myGlobalIndex:", myGlobalIndex, "currentPlayer:", syncedState.currentPlayer)
@@ -75,10 +74,12 @@ export class OnlineTrucoEngine {
       ...syncedState,
       currentPlayerId,
       players: [
+        // My player is always at local index 0
         {
           ...syncedState.players[myGlobalIndex],
           hand: Array.isArray(syncedState.players[myGlobalIndex]?.hand) ? syncedState.players[myGlobalIndex].hand : [],
         },
+        // Opponent is always at local index 1
         {
           ...syncedState.players[opponentGlobalIndex],
           hand: Array.isArray(syncedState.players[opponentGlobalIndex]?.hand)
@@ -92,19 +93,23 @@ export class OnlineTrucoEngine {
     return engine
   }
 
-  private findPlayerIndex(gameState: any, playerId: string): number {
+  private findPlayerGlobalIndex(gameState: any, playerId: string): number {
     if (!gameState.players) return 0
 
     // Try to find by ID first
     const indexById = gameState.players.findIndex((p: any) => p.id === playerId)
     if (indexById !== -1) return indexById
 
-    // Fallback: check if this player created the room (player1)
+    // Try to find by name match
+    const indexByName = gameState.players.findIndex((p: any) => p.name === playerId)
+    if (indexByName !== -1) return indexByName
+
+    // Fallback: assume player1 if no match
     return 0
   }
 
   public getSyncableState(): any {
-    const myGlobalIndex = this.findPlayerIndex(this.gameState, this.myPlayerId)
+    const myGlobalIndex = this.findPlayerGlobalIndex(this.gameState, this.myPlayerId)
     const opponentGlobalIndex = 1 - myGlobalIndex
 
     const globalPlayers = [null, null]
@@ -432,12 +437,45 @@ export class OnlineTrucoEngine {
     }
   }
 
+  private isHandFinished(): boolean {
+    // Hand is finished when someone wins 2 bazas or all 3 bazas are played
+    const myWins = this.gameState.bazas.filter((b) => b.winner === 0).length
+    const opponentWins = this.gameState.bazas.filter((b) => b.winner === 1).length
+
+    return myWins >= 2 || opponentWins >= 2 || this.gameState.bazas.length >= 3
+  }
+
+  private finishHand(): void {
+    const myWins = this.gameState.bazas.filter((b) => b.winner === 0).length
+    const opponentWins = this.gameState.bazas.filter((b) => b.winner === 1).length
+
+    let handWinner: number
+    if (myWins > opponentWins) {
+      handWinner = 0
+    } else {
+      handWinner = 1
+    }
+
+    // Award points
+    const points = this.gameState.trucoAccepted ? this.getTrucoPoints() : 1
+    this.gameState.players[handWinner].score += points
+
+    console.log("[v0] Hand finished - winner:", handWinner, "points:", points)
+
+    // Check if game is finished
+    if (this.gameState.players[handWinner].score >= 30) {
+      this.gameState.phase = "finished"
+    } else {
+      this.startNewHand()
+    }
+  }
+
   private startNewHand(): GameState {
     const deck = createDeck()
     const [player1Hand, player2Hand] = dealCards(deck)
 
     const newMano = 1 - (this.gameState.mano || 0)
-    const startingPlayer = 1 - newMano // Non-dealer starts
+    const startingPlayer = 1 - newMano // Non-dealer starts according to Truco rules
 
     this.gameState.players[0].hand = player1Hand
     this.gameState.players[1].hand = player2Hand

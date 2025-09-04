@@ -29,6 +29,7 @@ export class OnlineGameManager {
   private statusCallback: ((status: string) => void) | null = null
   private matchmakingInterval: NodeJS.Timeout | null = null
   private gameStateInterval: NodeJS.Timeout | null = null
+  private realtimeChannel: any = null
 
   async createOrGetPlayer(username: string): Promise<Player> {
     // First try to get existing player
@@ -155,13 +156,23 @@ export class OnlineGameManager {
       if (!this.currentRoom) return
 
       try {
-        const { data: room } = await this.supabase.from("game_rooms").select("*").eq("id", this.currentRoom.id).single()
+        const { data: room, error } = await this.supabase
+          .from("game_rooms")
+          .select("*")
+          .eq("id", this.currentRoom.id)
+          .single()
+
+        if (error) {
+          console.error("[v0] Error fetching room:", error)
+          return
+        }
 
         if (room && room.updated_at !== this.currentRoom.updated_at) {
           console.log("[v0] Game state updated via polling:", room)
           this.currentRoom = room
 
           if (room.game_state) {
+            console.log("[v0] Received game state update:", room.game_state)
             this.gameStateCallback?.(room.game_state)
           }
         }
@@ -174,7 +185,12 @@ export class OnlineGameManager {
   private subscribeToMatchmaking() {
     if (!this.currentPlayer) return
 
-    const channel = this.supabase
+    // Clean up existing subscription
+    if (this.realtimeChannel) {
+      this.supabase.removeChannel(this.realtimeChannel)
+    }
+
+    this.realtimeChannel = this.supabase
       .channel("matchmaking")
       .on(
         "postgres_changes",
@@ -208,7 +224,9 @@ export class OnlineGameManager {
           this.startGameStatePolling()
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log("[v0] Matchmaking subscription status:", status)
+      })
   }
 
   async makeMove(action: GameAction): Promise<void> {
@@ -231,6 +249,8 @@ export class OnlineGameManager {
     if (!this.currentRoom) throw new Error("No active game")
 
     try {
+      console.log("[v0] Updating game state:", gameState)
+
       const { error } = await this.supabase
         .from("game_rooms")
         .update({
@@ -247,7 +267,7 @@ export class OnlineGameManager {
       console.log("[v0] Game state updated successfully")
     } catch (error) {
       console.error("[v0] Failed to update game state:", error)
-      // Just log it and continue
+      throw error // Re-throw to handle in calling code
     }
   }
 
@@ -303,6 +323,8 @@ export class OnlineGameManager {
     }
 
     try {
+      console.log("[v0] Starting game with initial state:", initialGameState)
+
       const { error } = await this.supabase
         .from("game_rooms")
         .update({
@@ -318,6 +340,7 @@ export class OnlineGameManager {
       console.log("[v0] Game started successfully by player1")
     } catch (error) {
       console.error("[v0] Failed to start game:", error)
+      throw error
     }
   }
 
@@ -332,7 +355,12 @@ export class OnlineGameManager {
   private subscribeToGameUpdates() {
     if (!this.currentRoom) return
 
-    const channel = this.supabase
+    // Clean up existing subscription
+    if (this.realtimeChannel) {
+      this.supabase.removeChannel(this.realtimeChannel)
+    }
+
+    this.realtimeChannel = this.supabase
       .channel(`game_${this.currentRoom.id}`)
       .on(
         "postgres_changes",
@@ -343,24 +371,32 @@ export class OnlineGameManager {
           filter: `id=eq.${this.currentRoom.id}`,
         },
         (payload) => {
-          console.log("[v0] Game state updated:", payload)
+          console.log("[v0] Received game state update:", payload)
           const updatedRoom = payload.new as GameRoom
           this.currentRoom = updatedRoom
 
           if (updatedRoom.game_state) {
+            console.log("[v0] Processing game state:", updatedRoom.game_state)
             this.gameStateCallback?.(updatedRoom.game_state)
           }
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log("[v0] Game updates subscription status:", status)
+      })
   }
 
   cleanup() {
-    this.supabase.removeAllChannels()
+    if (this.realtimeChannel) {
+      this.supabase.removeChannel(this.realtimeChannel)
+      this.realtimeChannel = null
+    }
+
     if (this.matchmakingInterval) {
       clearInterval(this.matchmakingInterval)
       this.matchmakingInterval = null
     }
+
     if (this.gameStateInterval) {
       clearInterval(this.gameStateInterval)
       this.gameStateInterval = null
