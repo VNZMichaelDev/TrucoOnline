@@ -93,6 +93,8 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             if (newGameState.status === "waiting" && !autoStartAttempted && gameManager.isPlayerOne()) {
               setAutoStartAttempted(true)
               setTimeout(() => autoStartGame(), 1000)
+            } else if (newGameState.status === "playing") {
+              setStatus("¡Partida en curso!")
             }
           }
         }
