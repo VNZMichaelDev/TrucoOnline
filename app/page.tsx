@@ -40,13 +40,10 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-6 md:p-10"
+      className="min-h-screen flex items-center justify-center p-6 md:p-10 bg-cover bg-center bg-no-repeat"
       style={{
         backgroundImage:
-          "url(https://hebbkx1anhila5yf.public.blob.vercel-storage.com/fondomenuprincipal.jpg-Ga2pUnRel8thNe4kscmoDlG2Gd5pZJ.jpeg)",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
+          "url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/fondomenuprincipal.jpg-Ga2pUnRel8thNe4kscmoDlG2Gd5pZJ.jpeg')",
       }}
     >
       <div className="w-full max-w-sm">
@@ -109,6 +106,5 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
-    // </CHANGE>
   )
 }
