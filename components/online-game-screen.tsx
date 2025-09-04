@@ -72,33 +72,37 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       gameManager.setGameStateCallback(async (newGameState) => {
         console.log("[v0] Received game state update:", newGameState)
 
-        if (newGameState && newGameState.players && isPlayerInitialized) {
+        if (newGameState && newGameState.players) {
           const myPlayerId = gameManager.getPlayerId()
 
-          let opponent = null
-          if (gameManager.isPlayerOne()) {
-            opponent = newGameState.players[1]
-          } else {
-            opponent = newGameState.players[0]
-          }
-
-          if (opponent) {
-            setOpponentName(opponent.name)
-          }
-
           if (myPlayerId) {
+            console.log("[v0] Processing game state for player:", myPlayerId)
+
+            let opponent = null
+            if (gameManager.isPlayerOne()) {
+              opponent = newGameState.players[1]
+            } else {
+              opponent = newGameState.players[0]
+            }
+
+            if (opponent) {
+              setOpponentName(opponent.name)
+            }
+
             const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, myPlayerId)
             setGameEngine(updatedEngine)
             setGameState(updatedEngine.getGameState())
             setGameReady(true)
 
+            console.log("[v0] Game states updated - gameReady: true, gameEngine: set, gameState: set")
+
             const currentRoom = gameManager.getCurrentRoom()
-            if (currentRoom?.status === "waiting" && !autoStartAttempted && gameManager.isPlayerOne()) {
-              setAutoStartAttempted(true)
-              setTimeout(() => autoStartGame(), 1000)
-            } else if (currentRoom?.status === "playing") {
+            if (currentRoom?.status === "playing") {
               console.log("[v0] Game is now playing, updating status")
               setStatus("¡Partida en curso!")
+            } else if (currentRoom?.status === "waiting" && !autoStartAttempted && gameManager.isPlayerOne()) {
+              setAutoStartAttempted(true)
+              setTimeout(() => autoStartGame(), 1000)
             }
           }
         }
