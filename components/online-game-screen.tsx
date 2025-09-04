@@ -119,6 +119,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       if (isReady) {
         setStatus("Sincronizando partida...")
       } else {
+        // Solo player1 puede inicializar el juego
         if (gameManager.isPlayerOne()) {
           const myPlayerId = gameManager.getPlayerId()
           const engine = new OnlineTrucoEngine(playerName, opponentName, myPlayerId!)
@@ -128,6 +129,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           await gameManager.startGame(initialState)
           setStatus("¡Partida iniciada!")
         } else {
+          // Player2 no debería llegar aquí, pero por seguridad
           setStatus("Esperando que el oponente inicie la partida...")
         }
       }
@@ -316,7 +318,8 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 </div>
               )}
 
-              {canStartGame && !isProcessing && (
+              {/* Solo mostrar botón de iniciar para player1 cuando esté listo */}
+              {canStartGame && !isProcessing && gameManager.isPlayerOne() && (
                 <Button
                   onClick={startGame}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12"
@@ -326,9 +329,13 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 </Button>
               )}
 
-              {isProcessing && (
-                <div className="text-amber-200 text-sm">
-                  <div className="animate-pulse">Iniciando partida...</div>
+              {/* Mostrar mensaje específico para player2 */}
+              {canStartGame && !isProcessing && !gameManager.isPlayerOne() && (
+                <div className="text-amber-200 text-center">
+                  <p className="text-sm">Esperando que {opponentName} inicie la partida...</p>
+                  <div className="animate-pulse mt-2">
+                    <div className="h-2 bg-green-600 rounded-full"></div>
+                  </div>
                 </div>
               )}
 
