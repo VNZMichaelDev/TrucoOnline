@@ -15,7 +15,7 @@ export class OnlineTrucoEngine {
     const [player1Hand, player2Hand] = dealCards(deck)
 
     const isPlayer1Mano = true // Player 1 is always "mano" in first hand
-    const startingPlayer = 1 // Player 2 (non-dealer) starts according to Truco rules
+    const startingPlayer = 0 // Player 1 (who arrived first) starts
 
     return {
       players: [
@@ -34,7 +34,7 @@ export class OnlineTrucoEngine {
           isBot: false,
         },
       ],
-      currentPlayer: startingPlayer, // Start with player 2 (non-dealer)
+      currentPlayer: startingPlayer, // Start with player 1 (who arrived first)
       phase: "playing",
       table: [],
       bazas: [],
@@ -492,31 +492,6 @@ export class OnlineTrucoEngine {
     const opponentWins = this.gameState.bazas.filter((b) => b.winner === 1).length
 
     return myWins >= 2 || opponentWins >= 2 || this.gameState.bazas.length >= 3
-  }
-
-  private finishHand(): void {
-    const myWins = this.gameState.bazas.filter((b) => b.winner === 0).length
-    const opponentWins = this.gameState.bazas.filter((b) => b.winner === 1).length
-
-    let handWinner: number
-    if (myWins > opponentWins) {
-      handWinner = 0
-    } else {
-      handWinner = 1
-    }
-
-    // Award points
-    const points = this.gameState.trucoAccepted ? this.getTrucoPoints() : 1
-    this.gameState.players[handWinner].score += points
-
-    console.log("[v0] Hand finished - winner:", handWinner, "points:", points)
-
-    // Check if game is finished
-    if (this.gameState.players[handWinner].score >= 30) {
-      this.gameState.phase = "finished"
-    } else {
-      this.startNewHand()
-    }
   }
 
   private startNewHand(): GameState {
