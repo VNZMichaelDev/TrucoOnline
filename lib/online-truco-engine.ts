@@ -68,7 +68,10 @@ export class OnlineTrucoEngine {
     const myGlobalIndex = engine.findPlayerGlobalIndex(syncedState, currentPlayerId)
     const opponentGlobalIndex = 1 - myGlobalIndex
 
-    console.log("[v0] Syncing state - myGlobalIndex:", myGlobalIndex, "currentPlayer:", syncedState.currentPlayer)
+    console.log("[v0] Syncing state - myGlobalIndex:", myGlobalIndex, "globalCurrentPlayer:", syncedState.currentPlayer)
+
+    const localCurrentPlayer = syncedState.currentPlayer === myGlobalIndex ? 0 : 1
+    console.log("[v0] Mapped to localCurrentPlayer:", localCurrentPlayer)
 
     engine.gameState = {
       ...syncedState,
@@ -87,7 +90,7 @@ export class OnlineTrucoEngine {
             : [],
         },
       ],
-      currentPlayer: syncedState.currentPlayer === myGlobalIndex ? 0 : 1,
+      currentPlayer: localCurrentPlayer,
     }
 
     return engine
@@ -123,10 +126,18 @@ export class OnlineTrucoEngine {
       hand: [], // Hide opponent's hand in sync
     }
 
+    const globalCurrentPlayer = this.gameState.currentPlayer === 0 ? myGlobalIndex : opponentGlobalIndex
+    console.log(
+      "[v0] Converting localCurrentPlayer:",
+      this.gameState.currentPlayer,
+      "to globalCurrentPlayer:",
+      globalCurrentPlayer,
+    )
+
     return {
       ...this.gameState,
       players: globalPlayers,
-      currentPlayer: this.gameState.currentPlayer === 0 ? myGlobalIndex : opponentGlobalIndex,
+      currentPlayer: globalCurrentPlayer,
       currentPlayerId: undefined, // Remove device-specific data
     }
   }
