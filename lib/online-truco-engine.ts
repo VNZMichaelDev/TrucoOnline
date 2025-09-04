@@ -68,10 +68,18 @@ export class OnlineTrucoEngine {
     const myGlobalIndex = engine.findPlayerGlobalIndex(syncedState, currentPlayerId)
     const opponentGlobalIndex = 1 - myGlobalIndex
 
-    console.log("[v0] Syncing state - myGlobalIndex:", myGlobalIndex, "globalCurrentPlayer:", syncedState.currentPlayer)
+    console.log("[v0] === SYNC DEBUG ===")
+    console.log("[v0] currentPlayerId:", currentPlayerId)
+    console.log("[v0] myGlobalIndex:", myGlobalIndex)
+    console.log("[v0] globalCurrentPlayer:", syncedState.currentPlayer)
+    console.log(
+      "[v0] syncedState.players:",
+      syncedState.players.map((p) => ({ id: p.id, name: p.name })),
+    )
 
     const localCurrentPlayer = syncedState.currentPlayer === myGlobalIndex ? 0 : 1
     console.log("[v0] Mapped to localCurrentPlayer:", localCurrentPlayer)
+    console.log("[v0] This means isMyTurn will be:", localCurrentPlayer === 0)
 
     engine.gameState = {
       ...syncedState,
@@ -93,21 +101,51 @@ export class OnlineTrucoEngine {
       currentPlayer: localCurrentPlayer,
     }
 
+    console.log("[v0] Final local state - currentPlayer:", engine.gameState.currentPlayer)
+    console.log("[v0] === END SYNC DEBUG ===")
+
     return engine
   }
 
   private findPlayerGlobalIndex(gameState: any, playerId: string): number {
     if (!gameState.players) return 0
 
+    console.log("[v0] Finding global index for playerId:", playerId)
+
     // Try to find by ID first
     const indexById = gameState.players.findIndex((p: any) => p.id === playerId)
-    if (indexById !== -1) return indexById
+    if (indexById !== -1) {
+      console.log("[v0] Found by ID at index:", indexById)
+      return indexById
+    }
 
     // Try to find by name match
-    const indexByName = gameState.players.findIndex((p: any) => p.name === playerId)
-    if (indexByName !== -1) return indexByName
+    let indexByName = gameState.players.findIndex((p: any) => p.name === playerId)
+    if (indexByName !== -1) {
+      console.log("[v0] Found by name at index:", indexByName)
+      return indexByName
+    }
 
-    // Fallback: assume player1 if no match
+    // Try partial name match (in case of truncation)
+    indexByName = gameState.players.findIndex(
+      (p: any) => p.name && playerId && (p.name.includes(playerId) || playerId.includes(p.name)),
+    )
+    if (indexByName !== -1) {
+      console.log("[v0] Found by partial name match at index:", indexByName)
+      return indexByName
+    }
+
+    // Fallback: check if playerId looks like player1 or player2
+    if (playerId.includes("player1") || playerId.includes("Player 1")) {
+      console.log("[v0] Fallback to player1 (index 0)")
+      return 0
+    }
+    if (playerId.includes("player2") || playerId.includes("Player 2")) {
+      console.log("[v0] Fallback to player2 (index 1)")
+      return 1
+    }
+
+    console.log("[v0] No match found, defaulting to index 0")
     return 0
   }
 
@@ -127,12 +165,12 @@ export class OnlineTrucoEngine {
     }
 
     const globalCurrentPlayer = this.gameState.currentPlayer === 0 ? myGlobalIndex : opponentGlobalIndex
-    console.log(
-      "[v0] Converting localCurrentPlayer:",
-      this.gameState.currentPlayer,
-      "to globalCurrentPlayer:",
-      globalCurrentPlayer,
-    )
+
+    console.log("[v0] === SYNC OUT DEBUG ===")
+    console.log("[v0] localCurrentPlayer:", this.gameState.currentPlayer)
+    console.log("[v0] myGlobalIndex:", myGlobalIndex)
+    console.log("[v0] Converting to globalCurrentPlayer:", globalCurrentPlayer)
+    console.log("[v0] === END SYNC OUT DEBUG ===")
 
     return {
       ...this.gameState,
