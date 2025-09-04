@@ -275,7 +275,19 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     onBackToMenu()
   }
 
+  console.log(
+    "[v0] RENDER DEBUG - gameReady:",
+    gameReady,
+    "isPlayerInitialized:",
+    isPlayerInitialized,
+    "gameState:",
+    !!gameState,
+    "gameEngine:",
+    !!gameEngine,
+  )
+
   if (!gameReady || !isPlayerInitialized) {
+    console.log("[v0] Showing matchmaking screen - gameReady:", gameReady, "isPlayerInitialized:", isPlayerInitialized)
     return (
       <div
         className="min-h-screen flex items-center justify-center p-4"
@@ -320,7 +332,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   }
 
   if (!gameState || !gameEngine) {
-    console.log("[v0] GameReady is true but gameState or gameEngine is null, waiting...")
+    console.log(
+      "[v0] GameReady is true but gameState or gameEngine is null - gameState:",
+      !!gameState,
+      "gameEngine:",
+      !!gameEngine,
+    )
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-amber-200">Cargando juego...</div>
@@ -343,6 +360,8 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     gameState.currentPlayer,
     "waitingForResponse:",
     gameState.waitingForResponse,
+    "gamePhase:",
+    gameState.phase,
   )
 
   return (
