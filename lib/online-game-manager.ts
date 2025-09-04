@@ -31,6 +31,9 @@ export class OnlineGameManager {
   private matchmakingInterval: NodeJS.Timeout | null = null
   private gameStateInterval: NodeJS.Timeout | null = null
   private realtimeChannel: any = null
+  private isInMatchmaking = false
+  private hasFoundOpponent = false
+  private isGameStarted = false
 
   async createOrGetPlayer(username: string, userId?: string): Promise<Player> {
     if (!userId) {
@@ -78,6 +81,14 @@ export class OnlineGameManager {
   async joinMatchmaking(): Promise<void> {
     if (!this.currentPlayer) throw new Error("No player set")
 
+    if (this.isInMatchmaking) {
+      console.log("[v0] Already in matchmaking, ignoring duplicate request")
+      return
+    }
+
+    this.isInMatchmaking = true
+    this.hasFoundOpponent = false
+    this.isGameStarted = false
     this.statusCallback?.("Buscando oponente...")
 
     try {
@@ -88,6 +99,7 @@ export class OnlineGameManager {
       const { data: waitingPlayers } = await this.supabase
         .from("matchmaking_queue")
         .select("*")
+        .neq("player_id", this.currentPlayer.id) // Don't match with ourselves
         .order("created_at", { ascending: true })
         .limit(1)
 
@@ -111,10 +123,12 @@ export class OnlineGameManager {
 
         if (error) {
           console.error("[v0] Error creating game room:", error)
+          this.isInMatchmaking = false
           throw error
         }
 
         this.currentRoom = room
+        this.hasFoundOpponent = true
         this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
 
         // Start listening for game updates
@@ -126,6 +140,7 @@ export class OnlineGameManager {
 
         if (error) {
           console.error("[v0] Error joining matchmaking queue:", error)
+          this.isInMatchmaking = false
           throw error
         }
 
@@ -137,6 +152,7 @@ export class OnlineGameManager {
       }
     } catch (error) {
       console.error("[v0] Error in joinMatchmaking:", error)
+      this.isInMatchmaking = false
       this.statusCallback?.("Error de conexión. Intenta de nuevo.")
       throw error
     }
@@ -148,7 +164,7 @@ export class OnlineGameManager {
     }
 
     this.matchmakingInterval = setInterval(async () => {
-      if (!this.currentPlayer || this.currentRoom) return
+      if (!this.currentPlayer || this.currentRoom || this.hasFoundOpponent || !this.isInMatchmaking) return
 
       try {
         // Check if we got matched
@@ -163,6 +179,7 @@ export class OnlineGameManager {
         if (rooms && rooms.length > 0) {
           console.log("[v0] Found game room via polling:", rooms[0])
           this.currentRoom = rooms[0]
+          this.hasFoundOpponent = true
           this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
           this.subscribeToGameUpdates()
           this.startGameStatePolling()
@@ -176,7 +193,7 @@ export class OnlineGameManager {
       } catch (error) {
         console.error("[v0] Error in matchmaking polling:", error)
       }
-    }, 2000) // Poll every 2 seconds
+    }, 3000) // Increased interval to reduce server load
   }
 
   private startGameStatePolling() {
@@ -203,7 +220,11 @@ export class OnlineGameManager {
           console.log("[v0] Game state updated via polling:", room)
           this.currentRoom = room
 
-          if (room.game_state) {
+          if (room.status === "playing" && room.game_state && !this.isGameStarted) {
+            console.log("[v0] Game started! Processing initial state")
+            this.isGameStarted = true
+            this.gameStateCallback?.(room.game_state)
+          } else if (room.game_state && this.isGameStarted) {
             console.log("[v0] Received game state update:", room.game_state)
             this.gameStateCallback?.(room.game_state)
           }
@@ -211,7 +232,7 @@ export class OnlineGameManager {
       } catch (error) {
         console.error("[v0] Error in game state polling:", error)
       }
-    }, 1000) // Poll every 1 second during game
+    }, 1500) // Slightly faster polling for game state
   }
 
   private subscribeToMatchmaking() {
@@ -235,9 +256,16 @@ export class OnlineGameManager {
         (payload) => {
           console.log("[v0] Game room created (as player1):", payload)
           this.currentRoom = payload.new as GameRoom
+          this.hasFoundOpponent = true
           this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
           this.subscribeToGameUpdates()
           this.startGameStatePolling()
+
+          // Clear matchmaking polling
+          if (this.matchmakingInterval) {
+            clearInterval(this.matchmakingInterval)
+            this.matchmakingInterval = null
+          }
         },
       )
       .on(
@@ -251,9 +279,16 @@ export class OnlineGameManager {
         (payload) => {
           console.log("[v0] Game room created (as player2):", payload)
           this.currentRoom = payload.new as GameRoom
+          this.hasFoundOpponent = true
           this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
           this.subscribeToGameUpdates()
           this.startGameStatePolling()
+
+          // Clear matchmaking polling
+          if (this.matchmakingInterval) {
+            clearInterval(this.matchmakingInterval)
+            this.matchmakingInterval = null
+          }
         },
       )
       .subscribe((status) => {
@@ -312,6 +347,10 @@ export class OnlineGameManager {
   async leaveMatchmaking(): Promise<void> {
     if (!this.currentPlayer) return
 
+    this.isInMatchmaking = false
+    this.hasFoundOpponent = false
+    this.isGameStarted = false
+
     try {
       await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
     } catch (error) {
@@ -364,6 +403,11 @@ export class OnlineGameManager {
       return
     }
 
+    if (this.isGameStarted) {
+      console.log("[v0] Game already started, ignoring duplicate request")
+      return
+    }
+
     try {
       console.log("[v0] Starting game with initial state:", initialGameState)
 
@@ -382,6 +426,7 @@ export class OnlineGameManager {
       }
 
       this.currentRoom = { ...this.currentRoom, status: "playing", game_state: initialGameState }
+      this.isGameStarted = true
       console.log("[v0] Game started successfully by player1")
     } catch (error) {
       console.error("[v0] Failed to start game:", error)
@@ -437,6 +482,10 @@ export class OnlineGameManager {
   }
 
   cleanup() {
+    this.isInMatchmaking = false
+    this.hasFoundOpponent = false
+    this.isGameStarted = false
+
     if (this.realtimeChannel) {
       this.supabase.removeChannel(this.realtimeChannel)
       this.realtimeChannel = null
