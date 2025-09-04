@@ -1,114 +1,186 @@
 "use client"
 
-import type React from "react"
-
-import { createClient } from "@/lib/supabase/client"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { createBrowserClient } from "@supabase/ssr"
+import type { User } from "@supabase/supabase-js"
+import MainMenu from "@/components/main-menu"
+import GameScreen from "@/components/game-screen"
+import OnlineGameScreen from "@/components/online-game-screen"
+import SettingsScreen from "@/components/settings-screen"
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
+type Screen = "loading" | "name-entry" | "main-menu" | "game" | "online-game" | "settings"
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("[v0] Login attempt started", { email })
+export default function HomePage() {
+  const [playerName, setPlayerName] = useState("")
+  const [currentScreen, setCurrentScreen] = useState<Screen>("loading")
+  const [user, setUser] = useState<User | null>(null)
+  const [supabase] = useState(() =>
+    createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!),
+  )
 
-    const supabase = createClient()
-    setIsLoading(true)
-    setError(null)
+  useEffect(() => {
+    const checkAuth = async () => {
+      console.log("[v0] Starting auth check...")
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
 
-    try {
-      console.log("[v0] Calling Supabase signInWithPassword")
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+        console.log("[v0] Auth check result:", {
+          user: user ? "authenticated" : "not authenticated",
+          email: user?.email,
+        })
 
-      if (error) {
-        console.log("[v0] Supabase auth error:", error)
-        throw error
+        if (user) {
+          setUser(user)
+          // Use email as default player name if no name is set
+          if (!playerName && user.email) {
+            const defaultName = user.email.split("@")[0]
+            console.log("[v0] Setting default player name:", defaultName)
+            setPlayerName(defaultName)
+          }
+          console.log("[v0] Setting screen to name-entry")
+          setCurrentScreen("name-entry")
+        } else {
+          console.log("[v0] No user found, redirecting to login")
+          // Redirect to login if not authenticated
+          window.location.href = "/auth/login"
+        }
+      } catch (error) {
+        console.error("[v0] Auth check failed:", error)
+        window.location.href = "/auth/login"
       }
+    }
 
-      console.log("[v0] Login successful, redirecting to /")
-      router.push("/")
-    } catch (error: unknown) {
-      console.log("[v0] Login error caught:", error)
-      setError(error instanceof Error ? error.message : "An error occurred")
-    } finally {
-      setIsLoading(false)
+    checkAuth()
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("[v0] Auth state change:", { event, hasSession: !!session, hasUser: !!session?.user })
+      if (event === "SIGNED_OUT" || !session) {
+        window.location.href = "/auth/login"
+      } else if (session?.user) {
+        setUser(session.user)
+        if (!playerName && session.user.email) {
+          setPlayerName(session.user.email.split("@")[0])
+        }
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [supabase.auth, playerName])
+
+  const handleNameSubmit = () => {
+    if (playerName.trim()) {
+      setCurrentScreen("main-menu")
     }
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center p-6 md:p-10 bg-gradient-to-br from-amber-900 via-amber-800 to-amber-900">
-      <div className="w-full max-w-sm">
-        <Card className="bg-black/80 border-amber-600 shadow-2xl">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-amber-200">Truco Vale 4</CardTitle>
-            <CardDescription className="text-amber-100">
-              Ingresa tu email para acceder al juego de Truco
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin}>
-              <div className="flex flex-col gap-6">
-                <div className="grid gap-2">
-                  <Label htmlFor="email" className="text-amber-200">
-                    Email
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="bg-black/50 border-amber-600 text-amber-100 placeholder:text-amber-300/50"
-                  />
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = "/auth/login"
+  }
+
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case "loading":
+        return (
+          <div
+            className="min-h-screen flex items-center justify-center p-4"
+            style={{
+              backgroundImage:
+                "url(https://hebbkx1anhila5yf.public.blob.vercel-storage.com/fondomenuprincipal.jpg-Ga2pUnRel8thNe4kscmoDlG2Gd5pZJ.jpeg)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          >
+            <Card className="w-full max-w-sm mx-4 bg-black/80 border-amber-600 shadow-2xl">
+              <CardContent className="p-8 text-center">
+                <h1 className="text-3xl font-bold text-amber-200 mb-8">Cargando...</h1>
+                <div className="animate-pulse">
+                  <div className="h-2 bg-amber-600 rounded-full"></div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="password" className="text-amber-200">
-                    Contraseña
-                  </Label>
+              </CardContent>
+            </Card>
+          </div>
+        )
+
+      case "name-entry":
+        return (
+          <div
+            className="min-h-screen flex items-center justify-center p-4"
+            style={{
+              backgroundImage:
+                "url(https://hebbkx1anhila5yf.public.blob.vercel-storage.com/fondomenuprincipal.jpg-Ga2pUnRel8thNe4kscmoDlG2Gd5pZJ.jpeg)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          >
+            <Card className="w-full max-w-sm mx-4 bg-black/80 border-amber-600 shadow-2xl">
+              <CardContent className="p-8 text-center">
+                <h1 className="text-3xl font-bold text-amber-200 mb-8">Bienvenido al Truco</h1>
+                {user?.email && <p className="text-amber-300 text-sm mb-4">Conectado como: {user.email}</p>}
+                <div className="space-y-6">
                   <Input
-                    id="password"
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-black/50 border-amber-600 text-amber-100"
+                    type="text"
+                    placeholder="Ingresa tu nombre de jugador"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    className="bg-amber-50 border-amber-600 text-black text-lg h-12 px-4"
+                    onKeyPress={(e) => e.key === "Enter" && handleNameSubmit()}
                   />
+                  <Button
+                    onClick={handleNameSubmit}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white text-lg font-bold h-12"
+                    disabled={!playerName.trim()}
+                  >
+                    Continuar
+                  </Button>
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    className="w-full border-2 border-amber-600 text-amber-200 hover:bg-amber-600/20 font-bold h-10 bg-transparent"
+                  >
+                    Cerrar Sesión
+                  </Button>
                 </div>
-                {error && (
-                  <p className="text-sm text-red-400 bg-red-900/20 p-2 rounded border border-red-600">{error}</p>
-                )}
-                <Button
-                  type="submit"
-                  className="w-full bg-amber-600 hover:bg-amber-700 text-black font-bold h-12"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
-                </Button>
-              </div>
-              <div className="mt-4 text-center text-sm">
-                <span className="text-amber-200">¿No tienes cuenta? </span>
-                <Link href="/auth/sign-up" className="text-amber-400 underline underline-offset-4 hover:text-amber-300">
-                  Registrarse
-                </Link>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
+              </CardContent>
+            </Card>
+          </div>
+        )
+
+      case "main-menu":
+        return (
+          <MainMenu
+            playerName={playerName}
+            onStartGame={() => setCurrentScreen("game")}
+            onStartOnlineGame={() => setCurrentScreen("online-game")}
+            onOpenSettings={() => setCurrentScreen("settings")}
+          />
+        )
+
+      case "game":
+        return <GameScreen playerName={playerName} onBackToMenu={() => setCurrentScreen("main-menu")} />
+
+      case "online-game":
+        return (
+          <OnlineGameScreen playerName={playerName} onBackToMenu={() => setCurrentScreen("main-menu")} user={user} />
+        )
+
+      case "settings":
+        return <SettingsScreen onBackToMenu={() => setCurrentScreen("main-menu")} />
+
+      default:
+        return null
+    }
+  }
+
+  return renderScreen()
 }
