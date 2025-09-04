@@ -72,15 +72,11 @@ export class OnlineTrucoEngine {
     console.log("[v0] currentPlayerId:", currentPlayerId)
     console.log("[v0] myGlobalIndex:", myGlobalIndex)
     console.log("[v0] globalCurrentPlayer:", syncedState.currentPlayer)
-    console.log(
-      "[v0] syncedState.players:",
-      syncedState.players.map((p) => ({ id: p.id, name: p.name })),
-    )
 
     engine.gameState = {
       ...syncedState,
       currentPlayerId,
-      myGlobalIndex, // Store my global index for turn calculation
+      myGlobalIndex, // Store for turn calculation
       players: [
         {
           ...syncedState.players[myGlobalIndex],
@@ -93,11 +89,9 @@ export class OnlineTrucoEngine {
             : [],
         },
       ],
-      // Keep the global currentPlayer for turn calculation
-      currentPlayer: syncedState.currentPlayer,
     }
 
-    console.log("[v0] Final state - globalCurrentPlayer:", engine.gameState.currentPlayer)
+    console.log("[v0] Final state - currentPlayer:", engine.gameState.currentPlayer)
     console.log("[v0] My global index:", engine.gameState.myGlobalIndex)
     console.log("[v0] === END SYNC DEBUG ===")
 
@@ -131,7 +125,7 @@ export class OnlineTrucoEngine {
   }
 
   public getSyncableState(): any {
-    const myGlobalIndex = this.myPlayerId.includes("player1") || this.myPlayerId.includes("Player 1") ? 0 : 1
+    const myGlobalIndex = this.findMyGlobalIndex()
     const opponentGlobalIndex = 1 - myGlobalIndex
 
     const globalPlayers = [null, null]
@@ -145,17 +139,33 @@ export class OnlineTrucoEngine {
       hand: [], // Hide opponent's hand in sync
     }
 
+    const globalCurrentPlayer = this.gameState.currentPlayer === 0 ? myGlobalIndex : opponentGlobalIndex
+
     console.log("[v0] === SYNC OUT DEBUG ===")
     console.log("[v0] localCurrentPlayer:", this.gameState.currentPlayer)
     console.log("[v0] myGlobalIndex:", myGlobalIndex)
-    console.log("[v0] Converting to globalCurrentPlayer:", myGlobalIndex)
+    console.log("[v0] Converting to globalCurrentPlayer:", globalCurrentPlayer)
     console.log("[v0] === END SYNC OUT DEBUG ===")
 
     return {
       ...this.gameState,
       players: globalPlayers,
-      currentPlayer: myGlobalIndex, // Keep global current player
+      currentPlayer: globalCurrentPlayer, // Use converted global current player
       currentPlayerId: undefined, // Remove device-specific data
+      myGlobalIndex: undefined, // Remove device-specific data
+    }
+  }
+
+  private findMyGlobalIndex(): number {
+    // Use a consistent method to determine global index
+    if (this.myPlayerId.includes("player1") || this.myPlayerId.includes("Player 1")) {
+      return 0
+    } else if (this.myPlayerId.includes("player2") || this.myPlayerId.includes("Player 2")) {
+      return 1
+    } else {
+      // Use hash for unknown player IDs
+      const hash = this.myPlayerId.split("").reduce((a, b) => a + b.charCodeAt(0), 0)
+      return hash % 2
     }
   }
 
@@ -164,7 +174,7 @@ export class OnlineTrucoEngine {
   }
 
   public isMyTurn(): boolean {
-    const myGlobalIndex = this.gameState.myGlobalIndex ?? 0
+    const myGlobalIndex = this.gameState.myGlobalIndex ?? this.findMyGlobalIndex()
     const isMyTurn = this.gameState.currentPlayer === myGlobalIndex
     console.log(
       "[v0] Turn check - globalCurrentPlayer:",
@@ -266,9 +276,8 @@ export class OnlineTrucoEngine {
     if (this.gameState.table.length === 2) {
       this.resolveBaza()
     } else {
-      const myGlobalIndex = this.gameState.myGlobalIndex ?? 0
-      this.gameState.currentPlayer = 1 - myGlobalIndex
-      console.log("[v0] Switched turn to global player:", this.gameState.currentPlayer)
+      this.gameState.currentPlayer = 1
+      console.log("[v0] Switched turn to opponent (local index 1)")
     }
 
     return this.gameState
