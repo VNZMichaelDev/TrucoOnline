@@ -34,6 +34,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   const [opponentName, setOpponentName] = useState<string>("Oponente")
   const [isPlayerInitialized, setIsPlayerInitialized] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
+  const [gameReady, setGameReady] = useState(false)
 
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
 
@@ -89,11 +90,14 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, myPlayerId)
             setGameEngine(updatedEngine)
             setGameState(updatedEngine.getGameState())
+            setGameReady(true)
 
-            if (newGameState.status === "waiting" && !autoStartAttempted && gameManager.isPlayerOne()) {
+            const currentRoom = gameManager.getCurrentRoom()
+            if (currentRoom?.status === "waiting" && !autoStartAttempted && gameManager.isPlayerOne()) {
               setAutoStartAttempted(true)
               setTimeout(() => autoStartGame(), 1000)
-            } else if (newGameState.status === "playing") {
+            } else if (currentRoom?.status === "playing") {
+              console.log("[v0] Game is now playing, updating status")
               setStatus("¡Partida en curso!")
             }
           }
@@ -271,7 +275,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     onBackToMenu()
   }
 
-  if (!gameState || !isPlayerInitialized) {
+  if (!gameReady || !isPlayerInitialized) {
     return (
       <div
         className="min-h-screen flex items-center justify-center p-4"
@@ -311,6 +315,15 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             </div>
           </CardContent>
         </Card>
+      </div>
+    )
+  }
+
+  if (!gameState || !gameEngine) {
+    console.log("[v0] GameReady is true but gameState or gameEngine is null, waiting...")
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-amber-200">Cargando juego...</div>
       </div>
     )
   }
