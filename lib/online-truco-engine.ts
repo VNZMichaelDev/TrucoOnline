@@ -85,12 +85,10 @@ export class OnlineTrucoEngine {
       ...syncedState,
       currentPlayerId,
       players: [
-        // My player is always at local index 0
         {
           ...syncedState.players[myGlobalIndex],
           hand: Array.isArray(syncedState.players[myGlobalIndex]?.hand) ? syncedState.players[myGlobalIndex].hand : [],
         },
-        // Opponent is always at local index 1
         {
           ...syncedState.players[opponentGlobalIndex],
           hand: Array.isArray(syncedState.players[opponentGlobalIndex]?.hand)
@@ -135,32 +133,34 @@ export class OnlineTrucoEngine {
       return indexByName
     }
 
-    // Fallback: check if playerId looks like player1 or player2
-    if (playerId.includes("player1") || playerId.includes("Player 1")) {
+    if (playerId.includes("player1") || playerId.includes("Player 1") || playerId.endsWith("1")) {
       console.log("[v0] Fallback to player1 (index 0)")
       return 0
     }
-    if (playerId.includes("player2") || playerId.includes("Player 2")) {
+    if (playerId.includes("player2") || playerId.includes("Player 2") || playerId.endsWith("2")) {
       console.log("[v0] Fallback to player2 (index 1)")
       return 1
     }
 
-    console.log("[v0] No match found, defaulting to index 0")
-    return 0
+    // Final fallback: use first character or hash of playerId
+    const hash = playerId.split("").reduce((a, b) => a + b.charCodeAt(0), 0)
+    const index = hash % 2
+    console.log("[v0] Hash-based fallback to index:", index)
+    return index
   }
 
   public getSyncableState(): any {
-    const myGlobalIndex = this.findPlayerGlobalIndex(this.gameState, this.myPlayerId)
+    const myGlobalIndex = this.myPlayerId.includes("player1") || this.myPlayerId.includes("Player 1") ? 0 : 1
     const opponentGlobalIndex = 1 - myGlobalIndex
 
     const globalPlayers = [null, null]
     globalPlayers[myGlobalIndex] = {
       ...this.gameState.players[0], // My player (local index 0)
-      id: this.myPlayerId,
+      id: myGlobalIndex === 0 ? "player1" : "player2",
     }
     globalPlayers[opponentGlobalIndex] = {
       ...this.gameState.players[1], // Opponent (local index 1)
-      id: myGlobalIndex === 0 ? "player2" : "player1",
+      id: opponentGlobalIndex === 0 ? "player1" : "player2",
       hand: [], // Hide opponent's hand in sync
     }
 
