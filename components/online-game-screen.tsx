@@ -146,26 +146,48 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       return
     }
 
-    console.log("[v0] Processing action:", action, "isMyTurn:", gameEngine.isMyTurn())
+    const isMyTurnNow = gameEngine.isMyTurn()
+    const isWaitingForResponse = gameState.waitingForResponse
+    const isResponse = action.type === "ACCEPT" || action.type === "REJECT"
+
+    console.log(
+      "[v0] Processing action:",
+      action.type,
+      "isMyTurn:",
+      isMyTurnNow,
+      "waiting:",
+      isWaitingForResponse,
+      "isResponse:",
+      isResponse,
+    )
+
+    if (isResponse) {
+      if (isMyTurnNow) {
+        console.log("[v0] Cannot respond to own bet")
+        setMessage("No puedes responder a tu propia apuesta")
+        return
+      }
+      if (!isWaitingForResponse) {
+        console.log("[v0] No bet to respond to")
+        setMessage("No hay apuesta para responder")
+        return
+      }
+    } else {
+      if (!isMyTurnNow) {
+        console.log("[v0] Not my turn, cannot perform action:", action.type)
+        setMessage("No es tu turno")
+        return
+      }
+      if (isWaitingForResponse) {
+        console.log("[v0] Waiting for response, cannot perform action:", action.type)
+        setMessage("Esperando respuesta del oponente")
+        return
+      }
+    }
+
     setIsProcessing(true)
 
     try {
-      const isResponse = action.type === "ACCEPT" || action.type === "REJECT"
-
-      if (!gameEngine.isMyTurn() && !isResponse) {
-        console.log("[v0] Not my turn, cannot perform action:", action.type)
-        setMessage("No es tu turno")
-        setIsProcessing(false)
-        return
-      }
-
-      if (isResponse && gameEngine.isMyTurn()) {
-        console.log("[v0] Cannot respond to own bet")
-        setMessage("No puedes responder a tu propia apuesta")
-        setIsProcessing(false)
-        return
-      }
-
       const newState = gameEngine.processAction(action)
       setGameState(newState)
       setSelectedCardIndex(undefined)
@@ -253,23 +275,61 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   const handleCardClick = (cardIndex: number) => {
     if (!gameState || !gameEngine) return
 
-    console.log("[v0] Card clicked:", cardIndex, "canPlay:", gameEngine.canPlayCard(cardIndex))
+    const canPlay = gameEngine.canPlayCard(cardIndex)
+    const isMyTurnNow = gameEngine.isMyTurn()
+    const isWaitingForResponse = gameState.waitingForResponse
 
-    if (gameEngine.isMyTurn() && gameEngine.canPlayCard(cardIndex) && !isProcessing) {
+    console.log(
+      "[v0] Card clicked:",
+      cardIndex,
+      "canPlay:",
+      canPlay,
+      "isMyTurn:",
+      isMyTurnNow,
+      "waiting:",
+      isWaitingForResponse,
+    )
+
+    if (isMyTurnNow && !isWaitingForResponse && canPlay && !isProcessing) {
       setSelectedCardIndex(cardIndex)
+      console.log("[v0] Card selected successfully:", cardIndex)
     } else {
-      console.log("[v0] Cannot select card - not my turn or processing")
+      console.log(
+        "[v0] Card selection blocked - isMyTurn:",
+        isMyTurnNow,
+        "waiting:",
+        isWaitingForResponse,
+        "canPlay:",
+        canPlay,
+        "processing:",
+        isProcessing,
+      )
+      setSelectedCardIndex(undefined)
+
+      if (!isMyTurnNow) {
+        setMessage("No es tu turno")
+      } else if (isWaitingForResponse) {
+        setMessage("Esperando respuesta del oponente")
+      } else if (!canPlay) {
+        setMessage("No puedes jugar esta carta")
+      }
+
+      setTimeout(() => setMessage(""), 2000)
     }
   }
 
   const handlePlayCard = () => {
-    if (selectedCardIndex !== undefined) {
+    if (selectedCardIndex !== undefined && gameEngine?.isMyTurn() && !gameState?.waitingForResponse) {
       processAction({ type: "PLAY_CARD", cardIndex: selectedCardIndex })
+    } else {
+      setSelectedCardIndex(undefined)
+      setMessage("No puedes jugar en este momento")
+      setTimeout(() => setMessage(""), 2000)
     }
   }
 
   const handleGameAction = (action: GameAction) => {
-    if (!isProcessing) {
+    if (!isProcessing && gameEngine && gameState) {
       processAction(action)
     }
   }
