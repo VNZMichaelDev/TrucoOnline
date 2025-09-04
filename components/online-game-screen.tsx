@@ -34,6 +34,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   const [canStartGame, setCanStartGame] = useState(false)
   const [opponentName, setOpponentName] = useState<string>("Oponente")
   const [isPlayerInitialized, setIsPlayerInitialized] = useState(false)
+  const [hasStartedMatchmaking, setHasStartedMatchmaking] = useState(false)
 
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
 
@@ -65,7 +66,8 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       gameManager.setStatusCallback((newStatus) => {
         console.log("[v0] Status update:", newStatus)
         setStatus(newStatus)
-        if (newStatus.includes("encontrado")) {
+
+        if (newStatus.includes("encontrado") && !canStartGame) {
           setCanStartGame(true)
         }
       })
@@ -91,13 +93,18 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, myPlayerId)
             setGameEngine(updatedEngine)
             setGameState(updatedEngine.getGameState())
+
+            setCanStartGame(false)
           }
         }
       })
 
       setIsConnected(true)
 
-      await gameManager.joinMatchmaking()
+      if (!hasStartedMatchmaking) {
+        setHasStartedMatchmaking(true)
+        await gameManager.joinMatchmaking()
+      }
     } catch (error) {
       console.error("[v0] Error initializing online game:", error)
       setStatus("Error de conexión. Verifica tu autenticación.")
@@ -128,13 +135,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           console.log("[v0] Player1 initializing game with state:", initialState)
           await gameManager.startGame(initialState)
           setStatus("¡Partida iniciada!")
+          setCanStartGame(false)
         } else {
           // Player2 no debería llegar aquí, pero por seguridad
           setStatus("Esperando que el oponente inicie la partida...")
         }
       }
-
-      setCanStartGame(false)
     } catch (error) {
       console.error("[v0] Error starting game:", error)
       setStatus("Error al iniciar partida")
@@ -318,8 +324,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 </div>
               )}
 
-              {/* Solo mostrar botón de iniciar para player1 cuando esté listo */}
-              {canStartGame && !isProcessing && gameManager.isPlayerOne() && (
+              {canStartGame && !isProcessing && gameManager.isPlayerOne() && !gameState && (
                 <Button
                   onClick={startGame}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12"
@@ -329,8 +334,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 </Button>
               )}
 
-              {/* Mostrar mensaje específico para player2 */}
-              {canStartGame && !isProcessing && !gameManager.isPlayerOne() && (
+              {canStartGame && !isProcessing && !gameManager.isPlayerOne() && !gameState && (
                 <div className="text-amber-200 text-center">
                   <p className="text-sm">Esperando que {opponentName} inicie la partida...</p>
                   <div className="animate-pulse mt-2">
