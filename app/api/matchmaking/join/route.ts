@@ -33,14 +33,22 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (waitingPlayer) {
-      // Crear sala de juego
+      // Crear sala de juego con el primer jugador como creador
       const { data: gameRoom, error: roomError } = await supabase
         .from("game_rooms")
         .insert([
           {
-            player1_id: waitingPlayer.player_id,
+            player1_id: waitingPlayer.player_id, // El que estaba esperando es player1 (empieza primero)
             player2_id: playerId,
             status: "waiting",
+            game_state: {
+              currentPlayer: 0, // Player1 siempre empieza
+              phase: "playing",
+              players: [
+                { id: waitingPlayer.player_id, isBot: false },
+                { id: playerId, isBot: false },
+              ],
+            },
           },
         ])
         .select()
@@ -55,6 +63,7 @@ export async function POST(request: NextRequest) {
         matched: true,
         gameRoom,
         opponent: waitingPlayer,
+        playerIndex: 1, // El jugador que se une es player2
       })
     } else {
       // Agregar a cola de espera
@@ -69,6 +78,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         matched: false,
         queueEntry,
+        playerIndex: 0, // Será player1 cuando alguien se una
       })
     }
   } catch (error) {
