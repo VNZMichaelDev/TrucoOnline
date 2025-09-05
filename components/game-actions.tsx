@@ -17,7 +17,7 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 gap-1">
       {/* Envido Actions */}
       {bettingState.canSingEnvido && (
         <>
@@ -25,17 +25,17 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
             onClick={() => onAction({ type: "SING_ENVIDO" })}
             disabled={disabled}
             variant="outline"
-            className="border-2 border-blue-500 bg-blue-500/10 text-blue-300 hover:bg-blue-500/30 hover:text-white h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+            className="border-2 border-blue-500 text-blue-400 hover:bg-blue-500/20 h-9 text-sm font-bold rounded-lg"
           >
-            💎 Envido
+            Envido
           </Button>
           <Button
             onClick={() => onAction({ type: "SING_REAL_ENVIDO" })}
             disabled={disabled}
             variant="outline"
-            className="border-2 border-blue-500 bg-blue-500/10 text-blue-300 hover:bg-blue-500/30 hover:text-white h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+            className="border-2 border-blue-500 text-blue-400 hover:bg-blue-500/20 h-9 text-sm font-bold rounded-lg"
           >
-            💎 Real Envido
+            Real Envido
           </Button>
         </>
       )}
@@ -48,9 +48,9 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
               onClick={() => onAction({ type: "SING_TRUCO" })}
               disabled={disabled}
               variant="outline"
-              className="border-2 border-red-500 bg-red-500/10 text-red-300 hover:bg-red-500/30 hover:text-white h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-9 text-sm font-bold rounded-lg"
             >
-              ⚡ Truco
+              Truco
             </Button>
           )}
           {gameState.trucoLevel === 1 && (
@@ -58,9 +58,9 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
               onClick={() => onAction({ type: "SING_RETRUCO" })}
               disabled={disabled}
               variant="outline"
-              className="border-2 border-red-500 bg-red-500/10 text-red-300 hover:bg-red-500/30 hover:text-white h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-9 text-sm font-bold rounded-lg"
             >
-              ⚡ Retruco
+              Retruco
             </Button>
           )}
           {gameState.trucoLevel === 2 && (
@@ -68,9 +68,9 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
               onClick={() => onAction({ type: "SING_VALE_CUATRO" })}
               disabled={disabled}
               variant="outline"
-              className="border-2 border-red-500 bg-red-500/10 text-red-300 hover:bg-red-500/30 hover:text-white h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-9 text-sm font-bold rounded-lg"
             >
-              ⚡ Vale Cuatro
+              Vale Cuatro
             </Button>
           )}
         </>
@@ -81,9 +81,9 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
         <Button
           onClick={() => onAction({ type: "ACCEPT" })}
           disabled={disabled}
-          className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+          className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm font-bold rounded-lg shadow-lg"
         >
-          ✅ Quiero
+          Quiero
         </Button>
       )}
 
@@ -91,9 +91,9 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
         <Button
           onClick={() => onAction({ type: "REJECT" })}
           disabled={disabled}
-          className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+          className="bg-red-600 hover:bg-red-700 text-white h-9 text-sm font-bold rounded-lg shadow-lg"
         >
-          ❌ No Quiero
+          No Quiero
         </Button>
       )}
 
@@ -103,9 +103,9 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
           onClick={() => onAction({ type: "GO_TO_DECK" })}
           disabled={disabled}
           variant="outline"
-          className="border-2 border-gray-500 bg-gray-500/10 text-gray-300 hover:bg-gray-500/30 hover:text-white col-span-2 h-11 text-sm font-bold rounded-xl shadow-lg transform active:scale-95 transition-all"
+          className="border-2 border-gray-500 text-gray-400 hover:bg-gray-500/20 col-span-2 h-9 text-sm font-bold rounded-lg"
         >
-          🚪 Irse al Mazo
+          Irse al Mazo
         </Button>
       )}
     </div>
@@ -113,7 +113,14 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
 }
 
 function getBettingState(gameState: GameState) {
-  const currentPlayer = gameState.players[gameState.currentPlayer]
+  const currentPlayerIndex =
+    typeof gameState.currentPlayer === "number"
+      ? gameState.currentPlayer
+      : gameState.currentPlayer === "player1"
+        ? 0
+        : 1
+
+  const currentPlayer = gameState.players[currentPlayerIndex] || { isBot: false }
   const isFirstBaza = gameState.currentBaza === 0
   const hasPlayedCard = gameState.table.length > 0
 

@@ -14,11 +14,24 @@ export default function GameMessages({ message, gameState }: GameMessagesProps) 
     }
 
     if (gameState.waitingForResponse) {
-      const currentPlayer = gameState.players[gameState.currentPlayer]
+      const currentPlayerIndex =
+        typeof gameState.currentPlayer === "number"
+          ? gameState.currentPlayer
+          : gameState.currentPlayer === "player1"
+            ? 0
+            : 1
+      const currentPlayer = gameState.players[currentPlayerIndex] || { name: "Jugador" }
       return `Esperando respuesta de ${currentPlayer.name}...`
     }
 
-    if (gameState.currentPlayer === 0) {
+    const currentPlayerIndex =
+      typeof gameState.currentPlayer === "number"
+        ? gameState.currentPlayer
+        : gameState.currentPlayer === "player1"
+          ? 0
+          : 1
+
+    if (currentPlayerIndex === 0) {
       return "Tu turno"
     } else {
       return "Turno del Bot"
