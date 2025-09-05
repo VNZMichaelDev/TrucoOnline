@@ -472,8 +472,12 @@ export class OnlineTrucoEngine {
     return this.myPlayerId
   }
 
+  public getMyPlayerIndex(): number {
+    return this.myPlayerId === "player1" ? 0 : 1
+  }
+
   public getCurrentPlayerIndex(): number {
-    return this.myPlayerId === "player1" ? 0 : 1 // Always return 0 for display purposes (my player)
+    return this.gameState.currentPlayer
   }
 
   public getCurrentPlayer(): any {
