@@ -2,42 +2,52 @@ import type { Card, Suit, CardValue } from "./types"
 
 // Card hierarchy for Truco (higher number = stronger card)
 const TRUCO_VALUES: Record<string, number> = {
-  "espadas-1": 14, // Ancho de espadas
-  "bastos-1": 13, // Ancho de bastos
-  "espadas-7": 12, // Siete de espadas
-  "oro-7": 11, // Siete de oro
-  "oro-3": 10, // Tres
+  "espadas-1": 14, // Ancho de Espadas (highest)
+  "bastos-1": 13, // Ancho de Bastos
+  "espadas-7": 12, // Siete de Espadas
+  "oro-7": 11, // Siete de Oro (not "oro-7" but "oro-7" - this was correct)
+  // All 3s have same value
+  "oro-3": 10,
   "copas-3": 10,
   "espadas-3": 10,
   "bastos-3": 10,
-  "oro-2": 9, // Dos
+  // All 2s have same value
+  "oro-2": 9,
   "copas-2": 9,
   "espadas-2": 9,
   "bastos-2": 9,
-  "oro-1": 8, // Ases falsos
-  "copas-1": 8,
-  "oro-12": 7, // Figuras
+  // False aces (1♥, 1♦)
+  "copas-1": 8, // 1♥
+  "oro-1": 8, // 1♦
+  // All 12s (Kings)
+  "oro-12": 7,
   "copas-12": 7,
   "espadas-12": 7,
   "bastos-12": 7,
+  // All 11s (Horses)
   "oro-11": 6,
   "copas-11": 6,
   "espadas-11": 6,
   "bastos-11": 6,
+  // All 10s (Sotas)
   "oro-10": 5,
   "copas-10": 5,
   "espadas-10": 5,
   "bastos-10": 5,
-  "copas-7": 4, // Sietes falsos
-  "bastos-7": 4,
+  // False sevens (7♥, 7♣)
+  "copas-7": 4, // 7♥
+  "bastos-7": 4, // 7♣
+  // All 6s
   "oro-6": 3,
   "copas-6": 3,
   "espadas-6": 3,
   "bastos-6": 3,
+  // All 5s
   "oro-5": 2,
   "copas-5": 2,
   "espadas-5": 2,
   "bastos-5": 2,
+  // All 4s (lowest)
   "oro-4": 1,
   "copas-4": 1,
   "espadas-4": 1,

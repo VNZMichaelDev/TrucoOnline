@@ -43,6 +43,7 @@ export class TrucoEngine {
       currentBaza: 0,
       lastWinner: 0,
       waitingForResponse: false,
+      mano: 0, // Player who starts the hand (rotates each hand)
     }
   }
 
@@ -122,35 +123,55 @@ export class TrucoEngine {
 
   private resolveBaza(): void {
     const [card1, card2] = this.gameState.table
-    const comparison = compareCards(card2, card1) // card2 vs card1
+    const comparison = compareCards(card2, card1)
 
     let winner: number
-    let isDraw = false
+    let isParda = false
 
     if (comparison > 0) {
-      winner = 1 // Second player (current player) wins
+      winner = 1 // Second player wins
     } else if (comparison < 0) {
       winner = 0 // First player wins
     } else {
-      isDraw = true
-      winner = this.gameState.lastWinner // Previous winner takes draw
+      isParda = true
+
+      // Parda logic:
+      // - If first baza is parda, whoever wins second baza wins the hand
+      // - If second baza is parda, whoever won first baza wins the hand
+      // - If all three bazas are parda, the "mano" (hand starter) wins
+
+      if (this.gameState.currentBaza === 0) {
+        // First baza parda - continue playing, winner will be determined by next baza
+        winner = this.gameState.lastWinner // Temporary, will be overridden
+      } else if (this.gameState.currentBaza === 1) {
+        // Second baza parda - first baza winner takes the hand
+        const firstBazaWinner = this.gameState.bazas[0]?.winner ?? 0
+        winner = firstBazaWinner
+      } else {
+        // Third baza parda - mano (hand starter) wins
+        winner = this.gameState.mano ?? 0
+      }
     }
 
     // Record baza result
     this.gameState.bazas.push({
       winner,
       cards: [...this.gameState.table],
+      isParda,
     })
 
     // Clear table
     this.gameState.table = []
 
     // Update game state
-    this.gameState.lastWinner = winner
+    if (!isParda || this.gameState.currentBaza > 0) {
+      this.gameState.lastWinner = winner
+    }
+
     this.gameState.currentBaza++
     this.gameState.currentPlayer = winner
 
-    // Check if hand is finished
+    // Check if hand is finished with correct logic
     if (this.isHandFinished()) {
       this.finishHand()
     }
@@ -158,13 +179,32 @@ export class TrucoEngine {
 
   private isHandFinished(): boolean {
     const bazaWins = [0, 0]
+    let pardas = 0
 
     this.gameState.bazas.forEach((baza) => {
-      bazaWins[baza.winner]++
+      if (baza.isParda) {
+        pardas++
+      } else {
+        bazaWins[baza.winner]++
+      }
     })
 
-    // Someone won 2 bazas or all 3 bazas played
-    return bazaWins[0] >= 2 || bazaWins[1] >= 2 || this.gameState.bazas.length >= 3
+    // Hand ends when someone wins 2 bazas
+    if (bazaWins[0] >= 2 || bazaWins[1] >= 2) {
+      return true
+    }
+
+    // Special parda cases
+    if (this.gameState.bazas.length >= 3) {
+      return true // All three bazas played
+    }
+
+    // If first baza was parda and second baza is decided, hand ends
+    if (this.gameState.bazas.length >= 2 && this.gameState.bazas[0].isParda && !this.gameState.bazas[1].isParda) {
+      return true
+    }
+
+    return false
   }
 
   private finishHand(): void {
@@ -359,8 +399,19 @@ export class TrucoEngine {
         return 2 // Envido
       case 2:
         return 3 // Real Envido
-      case 3:
-        return Math.max(15, 30 - Math.min(this.gameState.players[0].score, this.gameState.players[1].score)) // Falta Envido
+      case 3: {
+        // Falta Envido - "al resto" calculation
+        const player1Score = this.gameState.players[0].score
+        const player2Score = this.gameState.players[1].score
+        const maxScore = Math.max(player1Score, player2Score)
+
+        // If both players are in "malas" (0-15), falta is to 15
+        // If at least one is in "buenas" (15-30), falta is to 30
+        const targetScore = maxScore >= 15 ? 30 : 15
+        const pointsToWin = targetScore - maxScore
+
+        return Math.max(1, pointsToWin) // At least 1 point
+      }
       default:
         return 0
     }
@@ -369,6 +420,8 @@ export class TrucoEngine {
   private startNewHand(): GameState {
     const deck = createDeck()
     const [playerHand, botHand] = dealCards(deck)
+
+    const newMano = 1 - (this.gameState.mano ?? 0)
 
     this.gameState.players[0].hand = playerHand
     this.gameState.players[1].hand = botHand
@@ -381,10 +434,11 @@ export class TrucoEngine {
     this.gameState.envidoPoints = 0
     this.gameState.handPoints = 1
     this.gameState.currentBaza = 0
-    this.gameState.currentPlayer = 0
+    this.gameState.currentPlayer = newMano // Mano starts
     this.gameState.waitingForResponse = false
     this.gameState.pendingAction = undefined
     this.gameState.phase = "playing"
+    this.gameState.mano = newMano
 
     return this.gameState
   }
