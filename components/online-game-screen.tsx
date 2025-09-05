@@ -77,6 +77,9 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           if (myPlayerId) {
             console.log("[v0] Processing game state for player:", myPlayerId)
 
+            const mySimplePlayerId = gameManager.isPlayerOne() ? "player1" : "player2"
+            console.log("[v0] Mapped UUID", myPlayerId, "to simple ID:", mySimplePlayerId)
+
             let opponent = null
             if (gameManager.isPlayerOne()) {
               opponent = newGameState.players[1]
@@ -88,7 +91,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
               setOpponentName(opponent.name)
             }
 
-            const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, myPlayerId)
+            const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, mySimplePlayerId)
             setGameEngine(updatedEngine)
             setGameState(updatedEngine.getGameState())
             setGameReady(true)
@@ -126,7 +129,10 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       const myPlayerId = gameManager.getPlayerId()
       if (!myPlayerId) throw new Error("Player ID not found")
 
-      const engine = new OnlineTrucoEngine(playerName, opponentName, myPlayerId)
+      const mySimplePlayerId = gameManager.isPlayerOne() ? "player1" : "player2"
+      console.log("[v0] Auto-starting with simple player ID:", mySimplePlayerId)
+
+      const engine = new OnlineTrucoEngine(playerName, opponentName, mySimplePlayerId)
       const initialState = engine.getSyncableState()
 
       console.log("[v0] Auto-initializing game with state:", initialState)
