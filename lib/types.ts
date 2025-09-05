@@ -19,7 +19,7 @@ export interface Player {
 
 export interface GameState {
   players: [Player, Player]
-  currentPlayer: number
+  currentPlayer: number | string
   phase: "dealing" | "envido" | "truco" | "playing" | "baza-result" | "hand-result" | "finished"
   table: Card[]
   bazas: { winner: number; cards: Card[] }[] // Who won each baza and what cards
@@ -31,9 +31,11 @@ export interface GameState {
   gamePoints: number
   handPoints: number // Points for current hand
   currentBaza: number
-  lastWinner: number // Who won the last baza
+  lastWinner: number | string // Who won the last baza
   waitingForResponse: boolean
   pendingAction?: GameAction
+  currentPlayerId?: string
+  mano?: string | number
 }
 
 export type GameAction =

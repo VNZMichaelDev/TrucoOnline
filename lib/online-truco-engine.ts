@@ -31,7 +31,7 @@ export class OnlineTrucoEngine {
           isBot: false,
         },
       ],
-      currentPlayer: "player1", // Use player ID directly instead of index
+      currentPlayer: 0, // Always start with player 1 (index 0)
       phase: "playing",
       table: [],
       bazas: [],
@@ -43,10 +43,10 @@ export class OnlineTrucoEngine {
       gamePoints: 0,
       handPoints: 1,
       currentBaza: 0,
-      lastWinner: "player1",
+      lastWinner: 0,
       waitingForResponse: false,
       currentPlayerId,
-      mano: "player1", // Use player ID for mano
+      mano: 0, // Use numeric index for mano
     }
   }
 
@@ -65,6 +65,19 @@ export class OnlineTrucoEngine {
     engine.gameState = {
       ...syncedState,
       currentPlayerId,
+      currentPlayer:
+        typeof syncedState.currentPlayer === "string"
+          ? syncedState.currentPlayer === "player1"
+            ? 0
+            : 1
+          : syncedState.currentPlayer || 0,
+      lastWinner:
+        typeof syncedState.lastWinner === "string"
+          ? syncedState.lastWinner === "player1"
+            ? 0
+            : 1
+          : syncedState.lastWinner || 0,
+      mano: typeof syncedState.mano === "string" ? (syncedState.mano === "player1" ? 0 : 1) : syncedState.mano || 0,
     }
 
     console.log("[v0] Synced state - currentPlayer:", engine.gameState.currentPlayer, "myPlayerId:", currentPlayerId)
@@ -84,10 +97,13 @@ export class OnlineTrucoEngine {
   }
 
   public isMyTurn(): boolean {
-    const isMyTurn = this.gameState.currentPlayer === this.myPlayerId
+    const currentPlayerId = this.gameState.currentPlayer === 0 ? "player1" : "player2"
+    const isMyTurn = currentPlayerId === this.myPlayerId
     console.log(
       "[v0] Turn check - currentPlayer:",
       this.gameState.currentPlayer,
+      "currentPlayerId:",
+      currentPlayerId,
       "myPlayerId:",
       this.myPlayerId,
       "isMyTurn:",
@@ -186,7 +202,7 @@ export class OnlineTrucoEngine {
     if (this.gameState.table.length === 2) {
       this.resolveBaza()
     } else {
-      this.gameState.currentPlayer = this.myPlayerId === "player1" ? "player2" : "player1"
+      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
       console.log("[v0] Switched turn to opponent:", this.gameState.currentPlayer)
     }
 
@@ -197,22 +213,22 @@ export class OnlineTrucoEngine {
     const [card1, card2] = this.gameState.table
     const comparison = compareCards(card2, card1)
 
-    let winner: string
+    let winner: number
     let isDraw = false
 
     if (comparison > 0) {
-      winner = this.myPlayerId === "player1" ? "player2" : "player1" // Second card wins (opponent)
+      winner = 1 // Second player wins
     } else if (comparison < 0) {
-      winner = this.myPlayerId // First card wins (me)
+      winner = 0 // First player wins
     } else {
       isDraw = true
-      winner = this.gameState.lastWinner
+      winner = this.gameState.lastWinner as number
     }
 
     console.log("[v0] Baza resolved - winner:", winner, "cards:", this.gameState.table)
 
     this.gameState.bazas.push({
-      winner: winner === "player1" ? 0 : 1, // Convert back to index for display
+      winner,
       cards: [...this.gameState.table],
     })
 
@@ -231,7 +247,7 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_TRUCO" }
-      this.gameState.currentPlayer = this.myPlayerId === "player1" ? "player2" : "player1"
+      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -241,7 +257,7 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
-      this.gameState.currentPlayer = this.myPlayerId === "player1" ? "player2" : "player1"
+      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -251,7 +267,7 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
-      this.gameState.currentPlayer = this.myPlayerId === "player1" ? "player2" : "player1"
+      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -261,7 +277,7 @@ export class OnlineTrucoEngine {
       this.gameState.envidoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_ENVIDO" }
-      this.gameState.currentPlayer = this.myPlayerId === "player1" ? "player2" : "player1"
+      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -271,7 +287,7 @@ export class OnlineTrucoEngine {
       this.gameState.envidoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
-      this.gameState.currentPlayer = this.myPlayerId === "player1" ? "player2" : "player1"
+      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -281,7 +297,7 @@ export class OnlineTrucoEngine {
       this.gameState.envidoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
-      this.gameState.currentPlayer = this.myPlayerId === "player1" ? "player2" : "player1"
+      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -395,7 +411,6 @@ export class OnlineTrucoEngine {
   }
 
   private isHandFinished(): boolean {
-    // Hand is finished when someone wins 2 bazas or all 3 bazas are played
     const myWins = this.gameState.bazas.filter((b) => b.winner === 0).length
     const opponentWins = this.gameState.bazas.filter((b) => b.winner === 1).length
 
@@ -406,8 +421,8 @@ export class OnlineTrucoEngine {
     const deck = createDeck()
     const [player1Hand, player2Hand] = dealCards(deck)
 
-    const newMano = this.gameState.mano === "player1" ? "player2" : "player1"
-    const startingPlayer = newMano === "player1" ? "player2" : "player1" // Non-dealer starts
+    const newMano = 1 - (this.gameState.mano as number)
+    const startingPlayer = newMano // Mano starts
 
     this.gameState.players[0].hand = player1Hand
     this.gameState.players[1].hand = player2Hand
