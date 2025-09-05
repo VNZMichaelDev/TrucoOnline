@@ -12,7 +12,6 @@ import HandDisplay from "@/components/ui/hand-display"
 import TableDisplay from "@/components/ui/table-display"
 import CardBack from "@/components/ui/card-back"
 import GameActions from "@/components/game-actions"
-import ScoreBoard from "@/components/score-board"
 import GameMessages from "@/components/game-messages"
 import type { GameState, GameAction } from "@/lib/types"
 
@@ -409,23 +408,21 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     )
   }
 
-  const myPlayerIndex = 0 // My player is always at index 0 in local state
-  const opponentIndex = 1 // Opponent is always at index 1 in local state
+  const myPlayerIndex = gameEngine?.getMyPlayerIndex() || 0
+  const opponentIndex = myPlayerIndex === 0 ? 1 : 0
   const playerHand = gameState.players[myPlayerIndex]?.hand || []
   const opponentHand = gameState.players[opponentIndex]?.hand || []
-  const playerCard = gameState.table[0] // First card on table
-  const opponentCard = gameState.table[1] // Second card on table
+  const playerCard = gameState.table[myPlayerIndex] // My card on table
+  const opponentCard = gameState.table[opponentIndex] // Opponent's card on table
   const isMyTurn = gameEngine?.isMyTurn() || false
 
   console.log(
-    "[v0] Render - isMyTurn:",
-    isMyTurn,
-    "currentPlayer:",
+    "[v0] Turn check - currentPlayer:",
     gameState.currentPlayer,
-    "waitingForResponse:",
-    gameState.waitingForResponse,
-    "gamePhase:",
-    gameState.phase,
+    "myPlayerIndex:",
+    myPlayerIndex,
+    "isMyTurn:",
+    isMyTurn,
   )
 
   return (
@@ -439,28 +436,40 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
         backgroundRepeat: "no-repeat",
       }}
     >
-      <div className="flex items-center justify-between p-2 h-14 flex-shrink-0">
+      <div className="flex items-center justify-between p-2 h-12 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={handleBackToMenu}
-            className="text-amber-200 hover:bg-amber-600/20 h-8 w-8"
+            className="text-amber-200 hover:bg-amber-600/20 h-7 w-7"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-base font-bold text-amber-200">Truco Online</h1>
-          {isConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
+          <h1 className="text-sm font-bold text-amber-200">Truco Online</h1>
+          {isConnected ? <Wifi className="h-3 w-3 text-green-500" /> : <WifiOff className="h-3 w-3 text-red-500" />}
         </div>
-        <ScoreBoard gameState={gameState} />
+        <div className="bg-black/70 border border-amber-600 rounded px-2 py-1">
+          <div className="flex items-center gap-3 text-xs">
+            <div className="text-center">
+              <div className="text-amber-200 font-medium">Jugador 1</div>
+              <div className="text-white font-bold">{gameState.players[0]?.score || 0}</div>
+            </div>
+            <div className="text-amber-400">-</div>
+            <div className="text-center">
+              <div className="text-amber-200 font-medium">Jugador 2</div>
+              <div className="text-white font-bold">{gameState.players[1]?.score || 0}</div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="h-8 flex-shrink-0">
+      <div className="h-6 flex-shrink-0">
         <GameMessages message={message} gameState={gameState} />
       </div>
 
-      <div className="flex-1 flex flex-col justify-between px-2" style={{ height: "calc(100vh - 88px)" }}>
-        <div className="text-center h-16 flex-shrink-0">
+      <div className="flex-1 flex flex-col justify-between px-2" style={{ height: "calc(100vh - 72px)" }}>
+        <div className="text-center h-12 flex-shrink-0">
           <div className="flex items-center justify-center gap-2 mb-1">
             <span className="text-amber-200 font-medium text-xs">{opponentName}</span>
             <span className="text-amber-300 text-xs">({opponentHand.length})</span>
@@ -473,7 +482,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           </div>
         </div>
 
-        <div className="flex items-center justify-center h-24 flex-shrink-0">
+        <div className="flex items-center justify-center h-20 flex-shrink-0">
           <Card className="bg-black/70 border-amber-600 p-2 w-full max-w-xs">
             <CardContent className="p-0">
               <TableDisplay
@@ -510,24 +519,26 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             {selectedCardIndex !== undefined && isMyTurn && !gameState.waitingForResponse && (
               <Button
                 onClick={handlePlayCard}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-10 text-sm rounded-lg"
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-8 text-xs rounded-lg"
                 disabled={isProcessing}
               >
                 Jugar Carta
               </Button>
             )}
 
-            <GameActions
-              gameState={gameState}
-              onAction={handleGameAction}
-              disabled={isProcessing}
-              bettingState={gameEngine?.getBettingState()}
-            />
+            <div className="grid grid-cols-2 gap-1">
+              <GameActions
+                gameState={gameState}
+                onAction={handleGameAction}
+                disabled={isProcessing}
+                bettingState={gameEngine?.getBettingState()}
+              />
+            </div>
 
             {gameState.phase === "finished" && (
               <Button
                 onClick={handleBackToMenu}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-10 text-sm rounded-lg"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-8 text-xs rounded-lg mt-1"
               >
                 Volver al Menú
               </Button>

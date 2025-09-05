@@ -1,31 +1,32 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import type { GameState, GameAction } from "@/lib/types"
+import type { GameState, GameAction, BettingState } from "@/lib/types"
 
 interface GameActionsProps {
   gameState: GameState
   onAction: (action: GameAction) => void
   disabled?: boolean
+  bettingState?: BettingState
 }
 
-export default function GameActions({ gameState, onAction, disabled = false }: GameActionsProps) {
-  const bettingState = getBettingState(gameState)
+export default function GameActions({ gameState, onAction, disabled = false, bettingState }: GameActionsProps) {
+  const betting = bettingState || getBettingState(gameState)
 
   if (gameState.phase === "finished") {
     return null
   }
 
   return (
-    <div className="grid grid-cols-2 gap-1">
+    <>
       {/* Envido Actions */}
-      {bettingState.canSingEnvido && (
+      {betting.canSingEnvido && (
         <>
           <Button
             onClick={() => onAction({ type: "SING_ENVIDO" })}
             disabled={disabled}
             variant="outline"
-            className="border-2 border-blue-500 text-blue-400 hover:bg-blue-500/20 h-9 text-sm font-bold rounded-lg"
+            className="border-2 border-blue-500 text-blue-400 hover:bg-blue-500/20 h-8 text-xs font-bold rounded-lg"
           >
             Envido
           </Button>
@@ -33,7 +34,7 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
             onClick={() => onAction({ type: "SING_REAL_ENVIDO" })}
             disabled={disabled}
             variant="outline"
-            className="border-2 border-blue-500 text-blue-400 hover:bg-blue-500/20 h-9 text-sm font-bold rounded-lg"
+            className="border-2 border-blue-500 text-blue-400 hover:bg-blue-500/20 h-8 text-xs font-bold rounded-lg"
           >
             Real Envido
           </Button>
@@ -41,14 +42,14 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
       )}
 
       {/* Truco Actions */}
-      {bettingState.canSingTruco && (
+      {betting.canSingTruco && (
         <>
           {gameState.trucoLevel === 0 && (
             <Button
               onClick={() => onAction({ type: "SING_TRUCO" })}
               disabled={disabled}
               variant="outline"
-              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-9 text-sm font-bold rounded-lg"
+              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-8 text-xs font-bold rounded-lg"
             >
               Truco
             </Button>
@@ -58,7 +59,7 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
               onClick={() => onAction({ type: "SING_RETRUCO" })}
               disabled={disabled}
               variant="outline"
-              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-9 text-sm font-bold rounded-lg"
+              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-8 text-xs font-bold rounded-lg"
             >
               Retruco
             </Button>
@@ -68,7 +69,7 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
               onClick={() => onAction({ type: "SING_VALE_CUATRO" })}
               disabled={disabled}
               variant="outline"
-              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-9 text-sm font-bold rounded-lg"
+              className="border-2 border-red-500 text-red-400 hover:bg-red-500/20 h-8 text-xs font-bold rounded-lg"
             >
               Vale Cuatro
             </Button>
@@ -77,38 +78,38 @@ export default function GameActions({ gameState, onAction, disabled = false }: G
       )}
 
       {/* Response Actions */}
-      {bettingState.canAccept && (
+      {betting.canAccept && (
         <Button
           onClick={() => onAction({ type: "ACCEPT" })}
           disabled={disabled}
-          className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm font-bold rounded-lg shadow-lg"
+          className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs font-bold rounded-lg shadow-lg"
         >
           Quiero
         </Button>
       )}
 
-      {bettingState.canReject && (
+      {betting.canReject && (
         <Button
           onClick={() => onAction({ type: "REJECT" })}
           disabled={disabled}
-          className="bg-red-600 hover:bg-red-700 text-white h-9 text-sm font-bold rounded-lg shadow-lg"
+          className="bg-red-600 hover:bg-red-700 text-white h-8 text-xs font-bold rounded-lg shadow-lg"
         >
           No Quiero
         </Button>
       )}
 
       {/* Go to Deck */}
-      {bettingState.canGoToDeck && (
+      {betting.canGoToDeck && (
         <Button
           onClick={() => onAction({ type: "GO_TO_DECK" })}
           disabled={disabled}
           variant="outline"
-          className="border-2 border-gray-500 text-gray-400 hover:bg-gray-500/20 col-span-2 h-9 text-sm font-bold rounded-lg"
+          className="border-2 border-gray-500 text-gray-400 hover:bg-gray-500/20 col-span-2 h-8 text-xs font-bold rounded-lg"
         >
           Irse al Mazo
         </Button>
       )}
-    </div>
+    </>
   )
 }
 
