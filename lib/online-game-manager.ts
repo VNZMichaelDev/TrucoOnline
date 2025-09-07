@@ -173,7 +173,8 @@ export class OnlineGameManager {
     try {
       // Create initial game state
       const OnlineTrucoEngine = (await import("@/lib/online-truco-engine")).OnlineTrucoEngine
-      const engine = new OnlineTrucoEngine("Jugador 1", "Jugador 2", this.currentPlayer!.id)
+      // Use "player1" as myPlayerId since this method is only called by player1
+      const engine = new OnlineTrucoEngine("Jugador 1", "Jugador 2", "player1")
       const initialState = engine.getSyncableState()
 
       await this.startGame(initialState)

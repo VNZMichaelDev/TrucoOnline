@@ -97,15 +97,17 @@ export class OnlineTrucoEngine {
   }
 
   public isMyTurn(): boolean {
-    const currentPlayerId = this.gameState.currentPlayer === 0 ? "player1" : "player2"
-    const isMyTurn = currentPlayerId === this.myPlayerId
+    // Determinar mi índice de jugador basado en myPlayerId
+    const myPlayerIndex = this.myPlayerId === "player1" ? 0 : 1
+    const isMyTurn = this.gameState.currentPlayer === myPlayerIndex
+    
     console.log(
       "[v0] Turn check - currentPlayer:",
       this.gameState.currentPlayer,
-      "currentPlayerId:",
-      currentPlayerId,
       "myPlayerId:",
       this.myPlayerId,
+      "myPlayerIndex:",
+      myPlayerIndex,
       "isMyTurn:",
       isMyTurn,
     )
@@ -116,17 +118,22 @@ export class OnlineTrucoEngine {
     const isMyTurn = this.isMyTurn()
     const isFirstBaza = this.gameState.currentBaza === 0
     const hasPlayedCard = this.gameState.table.length > 0
+    const isWaitingForMyResponse = !isMyTurn && this.gameState.waitingForResponse
 
     return {
-      canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel < 3 && !hasPlayedCard,
+      canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && !hasPlayedCard,
+      canSingRetruco: isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO",
+      canSingValeCuatro: isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO",
       canSingEnvido:
         isMyTurn &&
         !this.gameState.waitingForResponse &&
         this.gameState.envidoLevel === 0 &&
         isFirstBaza &&
         !hasPlayedCard,
-      canAccept: !isMyTurn && this.gameState.waitingForResponse,
-      canReject: !isMyTurn && this.gameState.waitingForResponse,
+      canSingRealEnvido: isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO",
+      canSingFaltaEnvido: isWaitingForMyResponse && (this.gameState.envidoLevel === 1 || this.gameState.envidoLevel === 2) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false),
+      canAccept: isWaitingForMyResponse,
+      canReject: isWaitingForMyResponse,
       canGoToDeck: isMyTurn && !this.gameState.waitingForResponse,
     }
   }
@@ -170,6 +177,8 @@ export class OnlineTrucoEngine {
         return this.goToDeck()
       case "START_NEW_HAND":
         return this.startNewHand()
+      case "CONTINUE_AFTER_BAZA":
+        return this.continueAfterBaza()
       default:
         return this.gameState
     }
@@ -214,28 +223,52 @@ export class OnlineTrucoEngine {
     const comparison = compareCards(card2, card1)
 
     let winner: number
-    let isDraw = false
+    let isParda = false
 
     if (comparison > 0) {
       winner = 1 // Second player wins
     } else if (comparison < 0) {
       winner = 0 // First player wins
     } else {
-      isDraw = true
-      winner = this.gameState.lastWinner as number
+      isParda = true
+
+      // - If first baza is parda, whoever wins second baza wins the hand
+      // - If second baza is parda, whoever won first baza wins the hand
+      // - If all three bazas are parda, the "mano" (hand starter) wins
+      if (this.gameState.currentBaza === 0) {
+        // First baza parda - continue playing, winner will be determined by next baza
+        winner = this.gameState.lastWinner as number // Temporary, will be overridden
+      } else if (this.gameState.currentBaza === 1) {
+        // Second baza parda - first baza winner takes the hand
+        const firstBazaWinner = this.gameState.bazas[0]?.winner ?? (this.gameState.mano as number)
+        winner = firstBazaWinner
+      } else {
+        // Third baza parda - mano (hand starter) wins
+        winner = this.gameState.mano as number
+      }
     }
 
-    console.log("[v0] Baza resolved - winner:", winner, "cards:", this.gameState.table)
+    console.log("[v0] Baza resolved - winner:", winner, "isParda:", isParda, "cards:", this.gameState.table)
 
     this.gameState.bazas.push({
       winner,
       cards: [...this.gameState.table],
+      isParda,
+      winnerName: isParda ? "Parda" : this.gameState.players[winner].name,
     })
 
-    this.gameState.table = []
-    this.gameState.lastWinner = winner
+    // NO limpiar la mesa inmediatamente - mantener las cartas visibles
+    // this.gameState.table = []
+
+    if (!isParda || this.gameState.currentBaza > 0) {
+      this.gameState.lastWinner = winner
+    }
+
     this.gameState.currentBaza++
     this.gameState.currentPlayer = winner
+
+    // Cambiar a fase de resultado de baza para mostrar quién ganó
+    this.gameState.phase = "baza-result"
 
     if (this.isHandFinished()) {
       this.finishHand()
@@ -253,7 +286,8 @@ export class OnlineTrucoEngine {
   }
 
   private singRetruco(): GameState {
-    if (this.gameState.trucoLevel === 1) {
+    // Solo se puede cantar retruco como respuesta a truco
+    if (this.gameState.trucoLevel === 1 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_TRUCO") {
       this.gameState.trucoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
@@ -263,7 +297,8 @@ export class OnlineTrucoEngine {
   }
 
   private singValeCuatro(): GameState {
-    if (this.gameState.trucoLevel === 2) {
+    // Solo se puede cantar vale cuatro como respuesta a retruco
+    if (this.gameState.trucoLevel === 2 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_RETRUCO") {
       this.gameState.trucoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
@@ -283,7 +318,8 @@ export class OnlineTrucoEngine {
   }
 
   private singRealEnvido(): GameState {
-    if (this.gameState.envidoLevel <= 1 && this.gameState.currentBaza === 0) {
+    // Solo se puede cantar real envido como respuesta a envido
+    if (this.gameState.envidoLevel === 1 && this.gameState.currentBaza === 0 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_ENVIDO") {
       this.gameState.envidoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
@@ -293,7 +329,8 @@ export class OnlineTrucoEngine {
   }
 
   private singFaltaEnvido(): GameState {
-    if (this.gameState.envidoLevel <= 2 && this.gameState.currentBaza === 0) {
+    // Se puede cantar falta envido como respuesta a envido o real envido
+    if ((this.gameState.envidoLevel === 1 || this.gameState.envidoLevel === 2) && this.gameState.currentBaza === 0 && this.gameState.waitingForResponse && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)) {
       this.gameState.envidoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
@@ -362,7 +399,7 @@ export class OnlineTrucoEngine {
     if (this.gameState.players[opponentIndex].score >= 30) {
       this.gameState.phase = "finished"
     } else {
-      this.startNewHand()
+      this.gameState.phase = "hand-result"
     }
 
     return this.gameState
@@ -400,21 +437,55 @@ export class OnlineTrucoEngine {
   private getEnvidoPoints(): number {
     switch (this.gameState.envidoLevel) {
       case 1:
-        return 2
+        return 2 // Envido
       case 2:
-        return 3
-      case 3:
-        return Math.max(15, 30 - Math.min(this.gameState.players[0].score, this.gameState.players[1].score))
+        return 3 // Real Envido
+      case 3: {
+        // "al resto" - to 15 if both in "malas", to 30 if at least one in "buenas"
+        const player1Score = this.gameState.players[0].score
+        const player2Score = this.gameState.players[1].score
+        const maxScore = Math.max(player1Score, player2Score)
+
+        // If both players are in "malas" (0-15), falta is to 15
+        // If at least one is in "buenas" (15-30), falta is to 30
+        const targetScore = maxScore >= 15 ? 30 : 15
+        const pointsToWin = targetScore - maxScore
+
+        return Math.max(1, pointsToWin) // At least 1 point
+      }
       default:
         return 0
     }
   }
 
   private isHandFinished(): boolean {
-    const myWins = this.gameState.bazas.filter((b) => b.winner === 0).length
-    const opponentWins = this.gameState.bazas.filter((b) => b.winner === 1).length
+    const bazaWins = [0, 0]
+    let pardas = 0
 
-    return myWins >= 2 || opponentWins >= 2 || this.gameState.bazas.length >= 3
+    this.gameState.bazas.forEach((baza) => {
+      if (baza.isParda) {
+        pardas++
+      } else {
+        bazaWins[baza.winner]++
+      }
+    })
+
+    // Hand ends when someone wins 2 bazas
+    if (bazaWins[0] >= 2 || bazaWins[1] >= 2) {
+      return true
+    }
+
+    // Special parda cases
+    if (this.gameState.bazas.length >= 3) {
+      return true // All three bazas played
+    }
+
+    // If first baza was parda and second baza is decided, hand ends
+    if (this.gameState.bazas.length >= 2 && this.gameState.bazas[0].isParda && !this.gameState.bazas[1].isParda) {
+      return true
+    }
+
+    return false
   }
 
   private startNewHand(): GameState {
@@ -506,33 +577,60 @@ export class OnlineTrucoEngine {
     )
   }
 
-  private finishHand(): void {
-    const myWins = this.gameState.bazas.filter((b) => {
-      const winnerPlayerId = b.winner === 0 ? "player1" : "player2"
-      return winnerPlayerId === this.myPlayerId
-    }).length
-
-    const opponentWins = this.gameState.bazas.filter((b) => {
-      const winnerPlayerId = b.winner === 0 ? "player1" : "player2"
-      return winnerPlayerId !== this.myPlayerId
-    }).length
-
-    let handWinner: string
-    if (myWins > opponentWins) {
-      handWinner = this.myPlayerId
+  private continueAfterBaza(): GameState {
+    // Limpiar la mesa después de mostrar el resultado de la baza
+    this.gameState.table = []
+    
+    // Si la mano terminó, no continuar jugando
+    if (this.isHandFinished()) {
+      this.finishHand()
     } else {
-      handWinner = this.myPlayerId === "player1" ? "player2" : "player1"
+      // Continuar con la siguiente baza
+      this.gameState.phase = "playing"
+    }
+    
+    return this.gameState
+  }
+
+  private finishHand(): void {
+    const bazaWins = [0, 0]
+
+    this.gameState.bazas.forEach((baza) => {
+      if (!baza.isParda) {
+        bazaWins[baza.winner]++
+      }
+    })
+
+    let handWinner: number
+
+    // Determine winner based on bazas won
+    if (bazaWins[0] > bazaWins[1]) {
+      handWinner = 0
+    } else if (bazaWins[1] > bazaWins[0]) {
+      handWinner = 1
+    } else {
+      // All bazas were parda - mano wins
+      handWinner = this.gameState.mano as number
     }
 
-    const winnerIndex = handWinner === "player1" ? 0 : 1
-    const points = this.gameState.trucoAccepted ? this.getTrucoPoints() : 1
+    let points = this.gameState.handPoints
 
-    this.gameState.players[winnerIndex].score += points
+    // Add truco points if accepted
+    if (this.gameState.trucoAccepted) {
+      points = this.getTrucoPoints()
+    }
 
-    if (this.gameState.players[winnerIndex].score >= 30) {
+    // Add envido points if played
+    if (this.gameState.envidoAccepted && this.gameState.envidoPoints > 0) {
+      points += this.getEnvidoPoints()
+    }
+
+    this.gameState.players[handWinner].score += points
+
+    if (this.gameState.players[handWinner].score >= 30) {
       this.gameState.phase = "finished"
     } else {
-      this.startNewHand()
+      this.gameState.phase = "hand-result"
     }
   }
 }
