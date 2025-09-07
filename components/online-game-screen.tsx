@@ -27,10 +27,10 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | undefined>()
   const [message, setMessage] = useState<string>("")
-  const [status, setStatus] = useState<string>("Buscando oponente...")
+  const [status, setStatus] = useState<string>("Buscando enemigo...")
   const [isConnected, setIsConnected] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [opponentName, setOpponentName] = useState<string>("Oponente")
+  const [opponentName, setOpponentName] = useState<string>("Enemigo")
   const [isPlayerInitialized, setIsPlayerInitialized] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
   const [gameReady, setGameReady] = useState(false)
@@ -77,6 +77,9 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           if (myPlayerId) {
             console.log("[v0] Processing game state for player:", myPlayerId)
 
+            const mySimplePlayerId = gameManager.isPlayerOne() ? "player1" : "player2"
+            console.log("[v0] Mapped UUID", myPlayerId, "to simple ID:", mySimplePlayerId)
+
             let opponent = null
             if (gameManager.isPlayerOne()) {
               opponent = newGameState.players[1]
@@ -88,7 +91,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
               setOpponentName(opponent.name)
             }
 
-            const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, myPlayerId)
+            const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, mySimplePlayerId)
             setGameEngine(updatedEngine)
             setGameState(updatedEngine.getGameState())
             setGameReady(true)
@@ -108,7 +111,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       })
 
       setIsConnected(true)
-      setStatus("Buscando oponente...")
+      setStatus("Buscando enemigo...")
 
       await gameManager.joinMatchmaking()
     } catch (error) {
@@ -120,13 +123,16 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
 
   const autoStartGame = async () => {
     console.log("[v0] Auto-starting game")
-    setStatus("¡Oponente encontrado! Iniciando partida...")
+    setStatus("¡Enemigo encontrado! Iniciando partida...")
 
     try {
       const myPlayerId = gameManager.getPlayerId()
       if (!myPlayerId) throw new Error("Player ID not found")
 
-      const engine = new OnlineTrucoEngine(playerName, opponentName, myPlayerId)
+      const mySimplePlayerId = gameManager.isPlayerOne() ? "player1" : "player2"
+      console.log("[v0] Auto-starting with simple player ID:", mySimplePlayerId)
+
+      const engine = new OnlineTrucoEngine(playerName, opponentName, mySimplePlayerId)
       const initialState = engine.getSyncableState()
 
       console.log("[v0] Auto-initializing game with state:", initialState)
@@ -179,7 +185,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       }
       if (isWaitingForResponse) {
         console.log("[v0] Waiting for response, cannot perform action:", action.type)
-        setMessage("Esperando respuesta del oponente")
+        setMessage("Esperando respuesta del enemigo")
         return
       }
     }
@@ -255,10 +261,14 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
         break
       case "PLAY_CARD":
         if (state.table.length === 2) {
-          const winner = state.bazas[state.bazas.length - 1]?.winner
-          if (winner !== undefined) {
-            const winnerName = winner === 0 ? myPlayer.name : opponent.name
-            setMessage(`${winnerName} gana la baza`)
+          const lastBaza = state.bazas[state.bazas.length - 1]
+          if (lastBaza) {
+            if (lastBaza.isParda) {
+              setMessage("¡Parda! - Empate en esta baza")
+            } else {
+              const winnerName = lastBaza.winnerName || (lastBaza.winner === 0 ? myPlayer.name : opponent.name)
+              setMessage(`¡${winnerName} gana la baza!`)
+            }
           }
         }
         break
@@ -290,11 +300,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     )
 
     if (isMyTurnNow && !isWaitingForResponse && canPlay && !isProcessing) {
-      setSelectedCardIndex(cardIndex)
-      console.log("[v0] Card selected successfully:", cardIndex)
+      // Jugar la carta directamente sin necesidad de confirmación
+      processAction({ type: "PLAY_CARD", cardIndex })
+      console.log("[v0] Card played directly:", cardIndex)
     } else {
       console.log(
-        "[v0] Card selection blocked - isMyTurn:",
+        "[v0] Card play blocked - isMyTurn:",
         isMyTurnNow,
         "waiting:",
         isWaitingForResponse,
@@ -303,14 +314,15 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
         "processing:",
         isProcessing,
       )
-      setSelectedCardIndex(undefined)
 
       if (!isMyTurnNow) {
         setMessage("No es tu turno")
       } else if (isWaitingForResponse) {
-        setMessage("Esperando respuesta del oponente")
+        setMessage("Esperando respuesta del enemigo")
       } else if (!canPlay) {
         setMessage("No puedes jugar esta carta")
+      } else if (isProcessing) {
+        setMessage("Procesando jugada...")
       }
 
       setTimeout(() => setMessage(""), 2000)
@@ -373,7 +385,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
               <div className="text-amber-100">
                 <p className="text-lg">¡Hola {playerName}!</p>
                 <p className="text-sm mt-2">{status}</p>
-                {opponentName !== "Oponente" && <p className="text-sm text-green-400 mt-1">Oponente: {opponentName}</p>}
+                {opponentName !== "Enemigo" && <p className="text-sm text-green-400 mt-1">Enemigo: {opponentName}</p>}
               </div>
 
               <div className="animate-pulse">
@@ -516,15 +528,6 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           />
 
           <div className="flex flex-col gap-1 px-1 pb-2">
-            {selectedCardIndex !== undefined && isMyTurn && !gameState.waitingForResponse && (
-              <Button
-                onClick={handlePlayCard}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-8 text-xs rounded-lg"
-                disabled={isProcessing}
-              >
-                Jugar Carta
-              </Button>
-            )}
 
             <div className="grid grid-cols-2 gap-1">
               <GameActions
@@ -534,6 +537,16 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 bettingState={gameEngine?.getBettingState()}
               />
             </div>
+
+            {gameState.phase === "baza-result" && (
+              <Button
+                onClick={() => handleGameAction({ type: "CONTINUE_AFTER_BAZA" })}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-8 text-xs rounded-lg mt-1"
+                disabled={isProcessing}
+              >
+                Continuar
+              </Button>
+            )}
 
             {gameState.phase === "finished" && (
               <Button
