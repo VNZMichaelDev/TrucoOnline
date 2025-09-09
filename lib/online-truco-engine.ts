@@ -118,7 +118,8 @@ export class OnlineTrucoEngine {
     const isMyTurn = this.isMyTurn()
     const isFirstBaza = this.gameState.currentBaza === 0
     const hasPlayedCard = this.gameState.table.length > 0
-    const isWaitingForMyResponse = !isMyTurn && this.gameState.waitingForResponse
+    // CORREGIDO: Un jugador puede responder cuando NO es su turno Y hay una apuesta pendiente
+    const isWaitingForMyResponse = this.gameState.waitingForResponse && !isMyTurn
 
     return {
       canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && !hasPlayedCard,
@@ -257,8 +258,8 @@ export class OnlineTrucoEngine {
       winnerName: isParda ? "Parda" : this.gameState.players[winner].name,
     })
 
-    // NO limpiar la mesa inmediatamente - mantener las cartas visibles
-    // this.gameState.table = []
+    // CORREGIDO: Mantener las cartas visibles en la mesa hasta que termine la ronda
+    // Las cartas se limpiarán cuando se continúe explícitamente
 
     if (!isParda || this.gameState.currentBaza > 0) {
       this.gameState.lastWinner = winner
@@ -578,7 +579,8 @@ export class OnlineTrucoEngine {
   }
 
   private continueAfterBaza(): GameState {
-    // Limpiar la mesa después de mostrar el resultado de la baza
+    // CORREGIDO: Mantener cartas visibles hasta que el usuario continúe
+    // Solo limpiar la mesa cuando se continúa explícitamente
     this.gameState.table = []
     
     // Si la mano terminó, no continuar jugando

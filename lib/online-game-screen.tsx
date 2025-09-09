@@ -78,15 +78,10 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           if (myPlayerId) {
             console.log("[v0] Processing game state for player:", myPlayerId)
 
-            let opponent = null
-            if (gameManager.isPlayerOne()) {
-              opponent = newGameState.players[1]
-            } else {
-              opponent = newGameState.players[0]
-            }
-
-            if (opponent) {
-              setOpponentName(opponent.name)
+            // CORREGIDO: Obtener nombre real del oponente
+            const opponentInfo = await gameManager.getOpponentInfo()
+            if (opponentInfo) {
+              setOpponentName(opponentInfo.name)
             }
 
             const updatedEngine = OnlineTrucoEngine.fromSyncedState(newGameState, myPlayerId)
@@ -127,6 +122,10 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       const myPlayerId = gameManager.getPlayerId()
       if (!myPlayerId) throw new Error("Player ID not found")
 
+      // CORREGIDO: Obtener nombres reales para el motor del juego
+      const opponentInfo = await gameManager.getOpponentInfo()
+      const opponentName = opponentInfo?.name || "Oponente"
+      
       const engine = new OnlineTrucoEngine(playerName, opponentName, myPlayerId)
       const initialState = engine.getSyncableState()
 
@@ -482,6 +481,21 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 playerName={playerName}
                 opponentName={opponentName}
               />
+              {/* CORREGIDO: Mostrar resultado de baza cuando está en fase baza-result */}
+              {gameState.phase === "baza-result" && gameState.bazas.length > 0 && (
+                <div className="mt-2 text-center">
+                  <div className="text-amber-200 text-sm font-medium">
+                    {gameState.bazas[gameState.bazas.length - 1].winnerName} gana la baza
+                  </div>
+                  <Button
+                    onClick={() => handleGameAction({ type: "CONTINUE_AFTER_BAZA" })}
+                    className="mt-1 bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1 h-auto"
+                    disabled={isProcessing}
+                  >
+                    Continuar
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

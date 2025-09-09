@@ -171,10 +171,14 @@ export class OnlineGameManager {
     console.log("[v0] Attempting auto-start as player1")
 
     try {
+      // CORREGIDO: Obtener nombres reales de los jugadores
+      const player1Name = await this.getPlayerName(this.currentRoom.player1_id)
+      const player2Name = await this.getPlayerName(this.currentRoom.player2_id)
+      
       // Create initial game state
       const OnlineTrucoEngine = (await import("@/lib/online-truco-engine")).OnlineTrucoEngine
       // Use "player1" as myPlayerId since this method is only called by player1
-      const engine = new OnlineTrucoEngine("Jugador 1", "Jugador 2", "player1")
+      const engine = new OnlineTrucoEngine(player1Name, player2Name, "player1")
       const initialState = engine.getSyncableState()
 
       await this.startGame(initialState)
@@ -513,6 +517,32 @@ export class OnlineGameManager {
       .subscribe((status) => {
         console.log("[v0] Game updates subscription status:", status)
       })
+  }
+
+  // CORREGIDO: Método para obtener nombre real del jugador
+  private async getPlayerName(playerId: string): Promise<string> {
+    try {
+      const { data: player } = await this.supabase
+        .from("players")
+        .select("username")
+        .eq("id", playerId)
+        .single()
+      
+      return player?.username || "Jugador"
+    } catch (error) {
+      console.error("[v0] Error getting player name:", error)
+      return "Jugador"
+    }
+  }
+
+  // CORREGIDO: Método para obtener información del oponente
+  async getOpponentInfo(): Promise<{ id: string, name: string } | null> {
+    if (!this.currentRoom || !this.currentPlayer) return null
+    
+    const opponentId = this.isPlayerOne() ? this.currentRoom.player2_id : this.currentRoom.player1_id
+    const opponentName = await this.getPlayerName(opponentId)
+    
+    return { id: opponentId, name: opponentName }
   }
 
   cleanup() {
