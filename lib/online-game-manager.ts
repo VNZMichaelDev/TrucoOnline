@@ -245,15 +245,37 @@ export class OnlineGameManager {
   }
 
   private async attemptAutoStart(): Promise<void> {
-    if (this.autoStartAttempted || this.isGameStarted || !this.currentRoom) return
+    if (this.autoStartAttempted || this.isGameStarted || !this.currentRoom) {
+      console.log("[v0] Auto-start skipped:", {
+        autoStartAttempted: this.autoStartAttempted,
+        isGameStarted: this.isGameStarted,
+        hasCurrentRoom: !!this.currentRoom
+      })
+      return
+    }
 
     this.autoStartAttempted = true
     console.log("[v0] Attempting auto-start as player1")
 
     try {
+      // Verificar que la sala esté en estado correcto
+      const { data: currentRoom } = await this.supabase
+        .from("game_rooms")
+        .select("*")
+        .eq("id", this.currentRoom.id)
+        .single()
+
+      if (!currentRoom || currentRoom.status !== "waiting") {
+        console.log("[v0] Room not in waiting state, cannot auto-start")
+        this.autoStartAttempted = false
+        return
+      }
+
       // CORREGIDO: Obtener nombres reales de los jugadores
       const player1Name = await this.getPlayerName(this.currentRoom.player1_id)
       const player2Name = await this.getPlayerName(this.currentRoom.player2_id)
+      
+      console.log("[v0] Creating initial game state with players:", { player1Name, player2Name })
       
       // Create initial game state
       const OnlineTrucoEngine = (await import("@/lib/online-truco-engine")).OnlineTrucoEngine
@@ -261,6 +283,7 @@ export class OnlineGameManager {
       const engine = new OnlineTrucoEngine(player1Name, player2Name, "player1")
       const initialState = engine.getSyncableState()
 
+      console.log("[v0] Starting game with initial state:", initialState)
       await this.startGame(initialState)
     } catch (error) {
       console.error("[v0] Error in auto-start:", error)
@@ -315,12 +338,16 @@ export class OnlineGameManager {
           this.subscribeToGameUpdates()
           this.startGameStatePolling()
 
-          // Solo player1 inicia el juego
-          if (this.isPlayerOne() && room.status === "waiting") {
-            console.log("[v0] I am player1, will attempt auto-start")
-            setTimeout(() => this.attemptAutoStart(), 1000)
+          // Solo player1 inicia el juego y solo si está en waiting
+          if (this.isPlayerOne() && room.status === "waiting" && !room.game_state) {
+            console.log("[v0] I am player1, will attempt auto-start in 2 seconds")
+            setTimeout(() => this.attemptAutoStart(), 2000)
+          } else if (room.status === "playing" && room.game_state) {
+            console.log("[v0] Game already started, processing existing state")
+            this.isGameStarted = true
+            this.gameStateCallback?.(room.game_state)
           } else {
-            console.log("[v0] I am player2, waiting for player1 to start")
+            console.log("[v0] I am player2 or game already started, waiting for updates")
           }
         }
       } catch (error) {
@@ -335,7 +362,14 @@ export class OnlineGameManager {
     }
 
     this.gameStateInterval = setInterval(async () => {
-      if (!this.currentRoom) return
+      if (!this.currentRoom) {
+        console.log("[v0] No current room, stopping game state polling")
+        if (this.gameStateInterval) {
+          clearInterval(this.gameStateInterval)
+          this.gameStateInterval = null
+        }
+        return
+      }
 
       try {
         const { data: room, error } = await this.supabase
@@ -349,8 +383,14 @@ export class OnlineGameManager {
           return
         }
 
-        if (room && room.updated_at !== this.currentRoom.updated_at) {
-          console.log("[v0] Game state updated via polling:", room)
+        if (room && room.updated_at !== this.currentRoom?.updated_at) {
+          console.log("[v0] Game state updated via polling:", {
+            roomId: room.id,
+            status: room.status,
+            hasGameState: !!room.game_state,
+            isGameStarted: this.isGameStarted
+          })
+          
           this.currentRoom = room
 
           if (room.status === "playing" && room.game_state && !this.isGameStarted) {
@@ -358,14 +398,14 @@ export class OnlineGameManager {
             this.isGameStarted = true
             this.gameStateCallback?.(room.game_state)
           } else if (room.game_state && this.isGameStarted) {
-            console.log("[v0] Received game state update:", room.game_state)
+            console.log("[v0] Received game state update")
             this.gameStateCallback?.(room.game_state)
           }
         }
       } catch (error) {
         console.error("[v0] Error in game state polling:", error)
       }
-    }, 1000) // Faster polling for better responsiveness
+    }, 1500) // Slightly slower polling to reduce load
   }
 
   private subscribeToMatchmaking() {
