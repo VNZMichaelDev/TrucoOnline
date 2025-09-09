@@ -28,6 +28,13 @@ export default function ScoreBoard({ gameState }: ScoreBoardProps) {
               <div className="text-amber-100 text-2xl font-bold">{opponentScore}</div>
             </div>
           </div>
+          
+          {/* CORREGIDO: Mostrar objetivo de puntos */}
+          <div className="mt-2 text-center">
+            <div className="text-amber-300 text-xs font-medium">
+              Primero a 30 puntos
+            </div>
+          </div>
 
           {/* Game Status */}
           <div className="mt-3 text-center">
