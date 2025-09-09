@@ -281,7 +281,8 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_TRUCO" }
-      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
+      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -292,7 +293,8 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
-      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
+      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -303,7 +305,8 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
-      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
+      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
@@ -313,29 +316,32 @@ export class OnlineTrucoEngine {
       this.gameState.envidoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_ENVIDO" }
-      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
+      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
 
   private singRealEnvido(): GameState {
     // Solo se puede cantar real envido como respuesta a envido
-    if (this.gameState.envidoLevel === 1 && this.gameState.currentBaza === 0 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_ENVIDO") {
+    if (this.gameState.envidoLevel === 1 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_ENVIDO") {
       this.gameState.envidoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
-      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
+      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
 
   private singFaltaEnvido(): GameState {
-    // Se puede cantar falta envido como respuesta a envido o real envido
-    if ((this.gameState.envidoLevel === 1 || this.gameState.envidoLevel === 2) && this.gameState.currentBaza === 0 && this.gameState.waitingForResponse && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)) {
+    // Solo se puede cantar falta envido como respuesta a envido o real envido
+    if ((this.gameState.envidoLevel === 1 || this.gameState.envidoLevel === 2) && this.gameState.waitingForResponse && this.gameState.pendingAction?.type?.includes("ENVIDO")) {
       this.gameState.envidoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
-      this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
+      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
     }
     return this.gameState
   }
