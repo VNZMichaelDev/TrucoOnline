@@ -266,13 +266,17 @@ export class OnlineTrucoEngine {
     }
 
     this.gameState.currentBaza++
+    // CORREGIDO: El ganador de la baza inicia la siguiente baza
     this.gameState.currentPlayer = winner
+    this.gameState.lastWinner = winner
 
-    // Cambiar a fase de resultado de baza para mostrar quién ganó
-    this.gameState.phase = "baza-result"
-
+    // CORREGIDO: No cambiar a baza-result, continuar jugando automáticamente
     if (this.isHandFinished()) {
       this.finishHand()
+    } else {
+      // Continuar con la siguiente baza automáticamente
+      this.gameState.phase = "playing"
+      this.gameState.table = [] // Limpiar mesa para siguiente baza
     }
   }
 
