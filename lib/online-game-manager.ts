@@ -41,26 +41,51 @@ export class OnlineGameManager {
       throw new Error("User ID is required for authentication")
     }
 
-    // First try to get existing player by user_id
-    const { data: existingPlayer } = await this.supabase.from("players").select("*").eq("user_id", userId).single()
-
-    if (existingPlayer) {
-      // Update last_seen and username if changed
+    // CORREGIDO: Evitar creación múltiple de jugadores
+    if (this.currentPlayer && this.currentPlayer.user_id === userId) {
+      console.log("[v0] Player already exists, updating last_seen")
       const { data: updatedPlayer } = await this.supabase
         .from("players")
         .update({
           last_seen: new Date().toISOString(),
-          username: username, // Update username in case it changed
+          username: username,
+        })
+        .eq("id", this.currentPlayer.id)
+        .select()
+        .single()
+      
+      if (updatedPlayer) {
+        this.currentPlayer = updatedPlayer
+        return updatedPlayer
+      }
+    }
+
+    // Buscar jugador existente por user_id
+    const { data: existingPlayer, error: selectError } = await this.supabase
+      .from("players")
+      .select("*")
+      .eq("user_id", userId)
+      .single()
+
+    if (existingPlayer && !selectError) {
+      console.log("[v0] Found existing player:", existingPlayer.username)
+      // Actualizar última conexión y nombre si cambió
+      const { data: updatedPlayer } = await this.supabase
+        .from("players")
+        .update({
+          last_seen: new Date().toISOString(),
+          username: username,
         })
         .eq("id", existingPlayer.id)
         .select()
         .single()
 
-      this.currentPlayer = updatedPlayer
-      return updatedPlayer
+      this.currentPlayer = updatedPlayer || existingPlayer
+      return this.currentPlayer
     }
 
-    // Create new player with user_id
+    // CORREGIDO: Crear nuevo jugador solo si no existe
+    console.log("[v0] Creating new player:", username)
     const { data: newPlayer, error } = await this.supabase
       .from("players")
       .insert({
@@ -76,6 +101,7 @@ export class OnlineGameManager {
     }
 
     this.currentPlayer = newPlayer
+    console.log("[v0] New player created successfully:", newPlayer.id)
     return newPlayer
   }
 
@@ -90,69 +116,110 @@ export class OnlineGameManager {
     this.isInMatchmaking = true
     this.hasFoundOpponent = false
     this.isGameStarted = false
-    this.autoStartAttempted = false // Reset auto-start flag
+    this.autoStartAttempted = false
     this.statusCallback?.("Buscando oponente...")
 
     try {
-      // Remove from queue if already there
+      // CORREGIDO: Limpiar cola completamente antes de empezar
       await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
+      
+      // CORREGIDO: Verificar si ya estamos en una partida activa
+      const { data: existingRooms } = await this.supabase
+        .from("game_rooms")
+        .select("*")
+        .or(`player1_id.eq.${this.currentPlayer.id},player2_id.eq.${this.currentPlayer.id}`)
+        .in("status", ["waiting", "playing"])
+        .limit(1)
 
-      // Check if there's someone waiting
-      const { data: waitingPlayers } = await this.supabase
+      if (existingRooms && existingRooms.length > 0) {
+        console.log("[v0] Player already in active game, reconnecting...")
+        this.currentRoom = existingRooms[0]
+        this.hasFoundOpponent = true
+        this.subscribeToGameUpdates()
+        this.startGameStatePolling()
+        this.statusCallback?.("Reconectando a partida...")
+        return
+      }
+
+      // CORREGIDO: Buscar oponente con mejor lógica
+      const { data: waitingPlayers, error: queueError } = await this.supabase
         .from("matchmaking_queue")
         .select("*")
-        .neq("player_id", this.currentPlayer.id) // Don't match with ourselves
+        .neq("player_id", this.currentPlayer.id)
         .order("created_at", { ascending: true })
         .limit(1)
 
+      if (queueError) {
+        console.error("[v0] Error checking queue:", queueError)
+        throw queueError
+      }
+
       if (waitingPlayers && waitingPlayers.length > 0) {
-        // Match found! Create game room
+        // CORREGIDO: Match encontrado - crear sala con transacción
         const opponent = waitingPlayers[0]
+        console.log("[v0] Match found with opponent:", opponent.player_id)
 
-        // Remove opponent from queue
-        await this.supabase.from("matchmaking_queue").delete().eq("id", opponent.id)
+        // Eliminar oponente de la cola primero
+        const { error: deleteError } = await this.supabase
+          .from("matchmaking_queue")
+          .delete()
+          .eq("id", opponent.id)
 
-        // Create game room
-        const { data: room, error } = await this.supabase
+        if (deleteError) {
+          console.error("[v0] Error removing opponent from queue:", deleteError)
+          throw deleteError
+        }
+
+        // Crear sala de juego
+        const { data: room, error: roomError } = await this.supabase
           .from("game_rooms")
           .insert({
-            player1_id: opponent.player_id,
-            player2_id: this.currentPlayer.id,
+            player1_id: opponent.player_id, // El que estaba esperando es player1
+            player2_id: this.currentPlayer.id, // El que se une es player2
             status: "waiting",
           })
           .select()
           .single()
 
-        if (error) {
-          console.error("[v0] Error creating game room:", error)
-          this.isInMatchmaking = false
-          throw error
+        if (roomError) {
+          console.error("[v0] Error creating game room:", roomError)
+          // Revertir - volver a poner oponente en cola
+          await this.supabase.from("matchmaking_queue").insert({ player_id: opponent.player_id })
+          throw roomError
         }
 
         this.currentRoom = room
         this.hasFoundOpponent = true
         this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
+        
+        console.log("[v0] Game room created:", room.id, "- I am player2")
 
-        // Start listening for game updates
+        // Iniciar suscripciones
         this.subscribeToGameUpdates()
         this.startGameStatePolling()
 
+        // Solo player1 puede iniciar el juego
         if (this.isPlayerOne()) {
-          setTimeout(() => this.attemptAutoStart(), 500)
+          setTimeout(() => this.attemptAutoStart(), 1000)
         }
       } else {
-        // No one waiting, join queue
-        const { error } = await this.supabase.from("matchmaking_queue").insert({ player_id: this.currentPlayer.id })
+        // CORREGIDO: Unirse a cola con verificación
+        console.log("[v0] No opponents found, joining queue")
+        
+        const { error: insertError } = await this.supabase
+          .from("matchmaking_queue")
+          .insert({ player_id: this.currentPlayer.id })
 
-        if (error) {
-          console.error("[v0] Error joining matchmaking queue:", error)
+        if (insertError) {
+          console.error("[v0] Error joining matchmaking queue:", insertError)
           this.isInMatchmaking = false
-          throw error
+          throw insertError
         }
 
         this.statusCallback?.("Esperando oponente...")
+        console.log("[v0] Successfully joined matchmaking queue")
 
-        // Listen for matchmaking updates
+        // Iniciar polling y suscripciones
         this.subscribeToMatchmaking()
         this.startMatchmakingPolling()
       }
@@ -193,41 +260,60 @@ export class OnlineGameManager {
       clearInterval(this.matchmakingInterval)
     }
 
+    console.log("[v0] Starting matchmaking polling")
     this.matchmakingInterval = setInterval(async () => {
-      if (!this.currentPlayer || this.currentRoom || this.hasFoundOpponent || !this.isInMatchmaking) return
+      if (!this.currentPlayer || this.currentRoom || this.hasFoundOpponent || !this.isInMatchmaking) {
+        return
+      }
 
       try {
-        // Check if we got matched
-        const { data: rooms } = await this.supabase
+        // CORREGIDO: Verificar si fuimos emparejados
+        const { data: rooms, error } = await this.supabase
           .from("game_rooms")
           .select("*")
           .or(`player1_id.eq.${this.currentPlayer.id},player2_id.eq.${this.currentPlayer.id}`)
-          .eq("status", "waiting")
+          .in("status", ["waiting", "playing"])
           .order("created_at", { ascending: false })
           .limit(1)
 
+        if (error) {
+          console.error("[v0] Error checking for game rooms:", error)
+          return
+        }
+
         if (rooms && rooms.length > 0) {
-          console.log("[v0] Found game room via polling:", rooms[0])
-          this.currentRoom = rooms[0]
+          const room = rooms[0]
+          console.log("[v0] Found game room via polling:", room.id, "Status:", room.status)
+          
+          this.currentRoom = room
           this.hasFoundOpponent = true
           this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
-          this.subscribeToGameUpdates()
-          this.startGameStatePolling()
-
-          // Clear matchmaking polling
+          
+          // Limpiar polling de matchmaking
           if (this.matchmakingInterval) {
             clearInterval(this.matchmakingInterval)
             this.matchmakingInterval = null
           }
+          
+          // Eliminar de cola de matchmaking
+          await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
+          
+          // Iniciar suscripciones de juego
+          this.subscribeToGameUpdates()
+          this.startGameStatePolling()
 
-          if (this.isPlayerOne()) {
-            setTimeout(() => this.attemptAutoStart(), 500)
+          // Solo player1 inicia el juego
+          if (this.isPlayerOne() && room.status === "waiting") {
+            console.log("[v0] I am player1, will attempt auto-start")
+            setTimeout(() => this.attemptAutoStart(), 1000)
+          } else {
+            console.log("[v0] I am player2, waiting for player1 to start")
           }
         }
       } catch (error) {
         console.error("[v0] Error in matchmaking polling:", error)
       }
-    }, 2000) // Reduced interval for faster matching
+    }, 3000) // CORREGIDO: Intervalo más largo para evitar spam
   }
 
   private startGameStatePolling() {
