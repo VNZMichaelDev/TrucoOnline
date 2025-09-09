@@ -527,16 +527,13 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             className="mb-2"
           />
 
-          <div className="flex flex-col gap-1 px-1 pb-2">
-
-            <div className="grid grid-cols-2 gap-1">
-              <GameActions
-                gameState={gameState}
-                onAction={handleGameAction}
-                disabled={isProcessing}
-                bettingState={gameEngine?.getBettingState()}
-              />
-            </div>
+          <div className="flex flex-col gap-2 px-2 pb-2">
+            <GameActions
+              gameState={gameState}
+              onAction={handleGameAction}
+              disabled={isProcessing}
+              bettingState={gameEngine?.getBettingState()}
+            /></div>
 
             {gameState.phase === "baza-result" && (
               <Button
