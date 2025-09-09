@@ -59,16 +59,23 @@ export default function TableDisplay({
           <div className="bg-black/30 backdrop-blur-sm px-2 sm:px-3 py-1 rounded-full border border-emerald-400/40">
             <span className="text-emerald-100 text-xs sm:text-sm font-semibold truncate max-w-20 sm:max-w-none">{opponentName}</span>
           </div>
-          <div className="relative">
+          <div className="relative w-16 h-24 sm:w-20 sm:h-28">
             {opponentCard ? (
-              <div className="transform hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg">
+              <div className="absolute inset-0 transform hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-20">
                 <div className="scale-75 sm:scale-90 md:scale-100">
                   <CardComponent card={opponentCard} isOnTable />
                 </div>
               </div>
             ) : (
-              <div className="w-12 h-18 sm:w-14 sm:h-20 md:w-16 md:h-24 bg-emerald-900/30 border border-dashed border-emerald-400/50 rounded-lg flex items-center justify-center">
+              <div className="absolute inset-0 bg-emerald-900/30 border border-dashed border-emerald-400/50 rounded-lg flex items-center justify-center">
                 <span className="text-emerald-300/70 text-xs">...</span>
+              </div>
+            )}
+            {playerCard && (
+              <div className="absolute inset-0 transform translate-x-2 translate-y-2 hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-10">
+                <div className="scale-75 sm:scale-90 md:scale-100 opacity-80">
+                  <CardComponent card={playerCard} isOnTable />
+                </div>
               </div>
             )}
           </div>
@@ -76,16 +83,23 @@ export default function TableDisplay({
 
         {/* Área de cartas - Jugador (abajo) */}
         <div className="absolute bottom-3 sm:bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2">
-          <div className="relative">
+          <div className="relative w-16 h-24 sm:w-20 sm:h-28">
             {playerCard ? (
-              <div className="transform hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg">
+              <div className="absolute inset-0 transform hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-20">
                 <div className="scale-75 sm:scale-90 md:scale-100">
                   <CardComponent card={playerCard} isOnTable />
                 </div>
               </div>
             ) : (
-              <div className="w-12 h-18 sm:w-14 sm:h-20 md:w-16 md:h-24 bg-emerald-900/30 border border-dashed border-emerald-400/50 rounded-lg flex items-center justify-center animate-pulse">
+              <div className="absolute inset-0 bg-emerald-900/30 border border-dashed border-emerald-400/50 rounded-lg flex items-center justify-center animate-pulse">
                 <span className="text-emerald-300/70 text-xs">Tu turno</span>
+              </div>
+            )}
+            {opponentCard && (
+              <div className="absolute inset-0 transform -translate-x-2 -translate-y-2 hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-10">
+                <div className="scale-75 sm:scale-90 md:scale-100 opacity-80">
+                  <CardComponent card={opponentCard} isOnTable />
+                </div>
               </div>
             )}
           </div>
