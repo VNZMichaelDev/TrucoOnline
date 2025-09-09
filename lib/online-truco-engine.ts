@@ -40,7 +40,6 @@ export class OnlineTrucoEngine {
       envidoLevel: 0,
       envidoAccepted: false,
       envidoPoints: 0,
-      gamePoints: 0,
       handPoints: 1,
       currentBaza: 0,
       lastWinner: 0,
@@ -276,7 +275,8 @@ export class OnlineTrucoEngine {
     } else {
       // Continuar con la siguiente baza automáticamente
       this.gameState.phase = "playing"
-      this.gameState.table = [] // Limpiar mesa para siguiente baza
+      // NO limpiar mesa - mantener cartas visibles hasta que termine la mano completa
+      // this.gameState.table = [] 
     }
   }
 
@@ -365,7 +365,7 @@ export class OnlineTrucoEngine {
       }
 
       this.gameState.waitingForResponse = false
-      this.gameState.pendingAction = undefined
+      this.gameState.pendingAction = null
     }
 
     return this.gameState
@@ -388,7 +388,7 @@ export class OnlineTrucoEngine {
       }
 
       this.gameState.waitingForResponse = false
-      this.gameState.pendingAction = undefined
+      this.gameState.pendingAction = null
 
       if (this.gameState.players[opponentIndex].score >= 30) {
         this.gameState.phase = "finished"
@@ -520,7 +520,7 @@ export class OnlineTrucoEngine {
     this.gameState.currentPlayer = startingPlayer
     this.gameState.lastWinner = startingPlayer
     this.gameState.waitingForResponse = false
-    this.gameState.pendingAction = undefined
+    this.gameState.pendingAction = null
     this.gameState.phase = "playing"
     this.gameState.mano = newMano
 
@@ -613,36 +613,66 @@ export class OnlineTrucoEngine {
       }
     })
 
-    let handWinner: number
+    let handWinner: number | null = null
 
-    // Determine winner based on bazas won
-    if (bazaWins[0] > bazaWins[1]) {
+    // Determine winner based on bazas won - Reglas oficiales del Truco Argentino
+    if (bazaWins[0] >= 2) {
       handWinner = 0
-    } else if (bazaWins[1] > bazaWins[0]) {
+    } else if (bazaWins[1] >= 2) {
       handWinner = 1
+    } else if (bazaWins[0] === 1 && bazaWins[1] === 1) {
+      // 1-1 con parda: gana quien ganó la primera baza
+      const firstBaza = this.gameState.bazas.find(b => !b.isParda)
+      if (firstBaza) {
+        handWinner = firstBaza.winner
+      } else {
+        // Todas pardas: gana la mano
+        handWinner = this.gameState.mano as number
+      }
     } else {
-      // All bazas were parda - mano wins
+      // Todas pardas: gana la mano
       handWinner = this.gameState.mano as number
     }
 
-    let points = this.gameState.handPoints
+    if (handWinner !== null) {
+      let points = 1 // Punto base por ganar la mano
 
-    // Add truco points if accepted
-    if (this.gameState.trucoAccepted) {
-      points = this.getTrucoPoints()
+      // Puntos del Truco según nivel
+      if (this.gameState.trucoAccepted) {
+        points = this.getTrucoPoints()
+      }
+
+      // Puntos del Envido (se suman por separado)
+      if (this.gameState.envidoAccepted) {
+        const envidoPoints = this.getEnvidoPoints()
+        this.gameState.players[handWinner].score += envidoPoints
+      }
+
+      // Sumar puntos de la mano
+      this.gameState.players[handWinner].score += points
+
+      // Verificar si alguien llegó a 30 puntos (ganar el juego)
+      if (this.gameState.players[handWinner].score >= 30) {
+        this.gameState.phase = "finished"
+        this.gameState.winner = this.gameState.players[handWinner].id
+      } else {
+        this.gameState.phase = "hand-result"
+      }
     }
 
-    // Add envido points if played
-    if (this.gameState.envidoAccepted && this.gameState.envidoPoints > 0) {
-      points += this.getEnvidoPoints()
-    }
-
-    this.gameState.players[handWinner].score += points
-
-    if (this.gameState.players[handWinner].score >= 30) {
-      this.gameState.phase = "finished"
-    } else {
-      this.gameState.phase = "hand-result"
-    }
+    // Reset para la siguiente mano - AHORA sí limpiar la mesa
+    this.gameState.currentBaza = 0
+    this.gameState.table = []
+    this.gameState.bazas = []
+    this.gameState.trucoLevel = 0
+    this.gameState.envidoLevel = 0
+    this.gameState.trucoAccepted = false
+    this.gameState.envidoAccepted = false
+    this.gameState.waitingForResponse = false
+    this.gameState.pendingAction = null
+    
+    // Rotar la mano para la siguiente ronda
+    this.gameState.mano = this.gameState.mano === 0 ? 1 : 0
+    this.gameState.currentPlayer = this.gameState.mano
   }
 }

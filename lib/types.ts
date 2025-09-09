@@ -22,20 +22,19 @@ export interface GameState {
   currentPlayer: number | string
   phase: "dealing" | "envido" | "truco" | "playing" | "baza-result" | "hand-result" | "finished"
   table: Card[]
-  bazas: { winner: number; cards: Card[]; isParda?: boolean; winnerName?: string }[] // Who won each baza and what cards
-  trucoLevel: 0 | 1 | 2 | 3 // 0=none, 1=truco, 2=retruco, 3=vale4
-  trucoAccepted: boolean
-  envidoLevel: 0 | 1 | 2 | 3 // 0=none, 1=envido, 2=real envido, 3=falta envido
-  envidoAccepted: boolean
-  envidoPoints: number
-  gamePoints: number
-  handPoints: number // Points for current hand
   currentBaza: number
-  lastWinner: number | string // Who won the last baza
+  bazas: { winner: number; cards: Card[]; isParda?: boolean; winnerName?: string }[]
+  trucoLevel: number
+  envidoLevel: number
+  trucoAccepted: boolean
+  envidoAccepted: boolean
   waitingForResponse: boolean
-  pendingAction?: GameAction
-  currentPlayerId?: string
-  mano: string | number // Player who starts the hand (rotates each hand)
+  pendingAction: GameAction | null
+  mano: number
+  lastWinner: number | null
+  handPoints: number
+  envidoPoints: number
+  winner?: string
 }
 
 export type GameAction =
