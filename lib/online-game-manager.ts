@@ -123,24 +123,20 @@ export class OnlineGameManager {
       // CORREGIDO: Limpiar cola completamente antes de empezar
       await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
       
-      // CORREGIDO: Verificar partidas existentes pero limpiar salas vacías
+      // CORREGIDO: Solo verificar partidas ACTIVAS para reconexión
       const { data: existingRooms } = await this.supabase
         .from("game_rooms")
         .select("*")
         .or(`player1_id.eq.${this.currentPlayer.id},player2_id.eq.${this.currentPlayer.id}`)
-        .in("status", ["waiting", "playing"])
+        .eq("status", "playing") // Solo buscar partidas activas
         .limit(1)
 
       if (existingRooms && existingRooms.length > 0) {
         const room = existingRooms[0]
         console.log("[v0] Found existing room:", room.id, "Status:", room.status)
         
-        // Si la sala está en waiting pero no tiene game_state, eliminarla
-        if (room.status === "waiting" && !room.game_state) {
-          console.log("[v0] Cleaning up empty waiting room")
-          await this.supabase.from("game_rooms").delete().eq("id", room.id)
-        } else if (room.status === "playing" && room.game_state) {
-          // Solo reconectar si hay un juego activo
+        // Solo reconectar si es una partida ACTIVA (playing) con game_state válido
+        if (room.status === "playing" && room.game_state) {
           console.log("[v0] Reconnecting to active game")
           this.currentRoom = room
           this.hasFoundOpponent = true
@@ -149,7 +145,8 @@ export class OnlineGameManager {
           this.statusCallback?.("Reconectando a partida...")
           return
         } else {
-          console.log("[v0] Room exists but invalid state, cleaning up")
+          // Limpiar cualquier sala que no sea una partida activa
+          console.log("[v0] Cleaning up non-active room")
           await this.supabase.from("game_rooms").delete().eq("id", room.id)
         }
       }
