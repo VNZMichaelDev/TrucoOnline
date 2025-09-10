@@ -533,7 +533,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
               onAction={handleGameAction}
               disabled={isProcessing}
               bettingState={gameEngine?.getBettingState()}
-            /></div>
+            />
 
             {gameState.phase === "baza-result" && (
               <Button
