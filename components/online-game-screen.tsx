@@ -57,10 +57,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
 
   const initializeOnlineGame = async () => {
     try {
-      console.log("[v0] Initializing online game for:", playerName, "user:", user?.id)
+      // Generar ID único por dispositivo/sesión
+      const deviceId = user?.id || `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      console.log("[v0] Initializing online game for:", playerName, "deviceId:", deviceId)
       setStatus("Conectando...")
 
-      await gameManager.createOrGetPlayer(playerName, user?.id)
+      await gameManager.createOrGetPlayer(playerName, deviceId)
       setIsPlayerInitialized(true)
 
       gameManager.setStatusCallback((newStatus) => {
