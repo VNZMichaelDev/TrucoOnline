@@ -140,9 +140,11 @@ export class OnlineGameManager {
           console.log("[v0] Reconnecting to active game")
           this.currentRoom = room
           this.hasFoundOpponent = true
+          this.isInMatchmaking = false // CRÍTICO: Detener matchmaking
+          this.isGameStarted = true // CRÍTICO: Marcar juego como iniciado
           this.subscribeToGameUpdates()
           this.startGameStatePolling()
-          this.statusCallback?.("Reconectando a partida...")
+          this.statusCallback?.("Partida en curso")
           return
         } else {
           // Limpiar cualquier sala que no sea una partida activa
