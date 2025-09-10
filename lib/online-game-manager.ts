@@ -80,7 +80,7 @@ export class OnlineGameManager {
         .select()
         .single()
 
-      this.currentPlayer = updatedPlayer || existingPlayer
+      this.currentPlayer = updatedPlayer || existingPlayer || this.currentPlayer
       return this.currentPlayer
     }
 
