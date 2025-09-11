@@ -15,8 +15,8 @@ export interface GameRoom {
   id: string
   player1_id: string
   player2_id: string
-  status: "waiting" | "playing" | "finished"
-  game_state: GameState | null
+  status: "waiting" | "active" | "finished"
+  current_game_state: GameState | null
   winner_id: string | null
   created_at: string
   updated_at: string
@@ -128,15 +128,15 @@ export class OnlineGameManager {
         .from("game_rooms")
         .select("*")
         .or(`player1_id.eq.${this.currentPlayer.id},player2_id.eq.${this.currentPlayer.id}`)
-        .eq("status", "playing") // Solo buscar partidas activas
+        .eq("status", "active") // Solo buscar partidas activas
         .limit(1)
 
       if (existingRooms && existingRooms.length > 0) {
         const room = existingRooms[0]
         console.log("[v0] Found existing room:", room.id, "Status:", room.status)
         
-        // Solo reconectar si es una partida ACTIVA (playing) con game_state válido
-        if (room.status === "playing" && room.game_state) {
+        // Solo reconectar si es una partida ACTIVA (active) con current_game_state válido
+        if (room.status === "active" && room.current_game_state) {
           console.log("[v0] Reconnecting to active game")
           this.currentRoom = room
           this.hasFoundOpponent = true
@@ -307,7 +307,7 @@ export class OnlineGameManager {
           .from("game_rooms")
           .select("*")
           .or(`player1_id.eq.${this.currentPlayer.id},player2_id.eq.${this.currentPlayer.id}`)
-          .in("status", ["waiting", "playing"])
+          .in("status", ["waiting", "active"])
           .order("created_at", { ascending: false })
           .limit(1)
 
@@ -338,13 +338,13 @@ export class OnlineGameManager {
           this.startGameStatePolling()
 
           // Solo player1 inicia el juego y solo si está en waiting
-          if (this.isPlayerOne() && room.status === "waiting" && !room.game_state) {
+          if (this.isPlayerOne() && room.status === "waiting" && !room.current_game_state) {
             console.log("[v0] I am player1, will attempt auto-start in 2 seconds")
             setTimeout(() => this.attemptAutoStart(), 2000)
-          } else if (room.status === "playing" && room.game_state) {
+          } else if (room.status === "active" && room.current_game_state) {
             console.log("[v0] Game already started, processing existing state")
             this.isGameStarted = true
-            this.gameStateCallback?.(room.game_state)
+            this.gameStateCallback?.(room.current_game_state)
           } else {
             console.log("[v0] I am player2 or game already started, waiting for updates")
           }
@@ -392,13 +392,13 @@ export class OnlineGameManager {
           
           this.currentRoom = room
 
-          if (room.status === "playing" && room.game_state && !this.isGameStarted) {
+          if (room.status === "active" && room.current_game_state && !this.isGameStarted) {
             console.log("[v0] Game started! Processing initial state")
             this.isGameStarted = true
-            this.gameStateCallback?.(room.game_state)
-          } else if (room.game_state && this.isGameStarted) {
+            this.gameStateCallback?.(room.current_game_state)
+          } else if (room.current_game_state && this.isGameStarted) {
             console.log("[v0] Received game state update")
-            this.gameStateCallback?.(room.game_state)
+            this.gameStateCallback?.(room.current_game_state)
           }
         }
       } catch (error) {
@@ -501,7 +501,7 @@ export class OnlineGameManager {
       const { error } = await this.supabase
         .from("game_rooms")
         .update({
-          game_state: gameState,
+          current_game_state: gameState,
           updated_at: new Date().toISOString(),
         })
         .eq("id", this.currentRoom.id)
@@ -529,8 +529,8 @@ export class OnlineGameManager {
       // CORREGIDO: Limpiar cola y salas vacías al salir
       await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
       
-      // Limpiar salas waiting sin game_state
-      if (this.currentRoom && this.currentRoom.status === "waiting" && !this.currentRoom.game_state) {
+      // Limpiar salas waiting sin current_game_state
+      if (this.currentRoom && this.currentRoom.status === "waiting" && !this.currentRoom.current_game_state) {
         console.log("[v0] Cleaning up waiting room on exit")
         await this.supabase.from("game_rooms").delete().eq("id", this.currentRoom.id)
       }
@@ -596,8 +596,8 @@ export class OnlineGameManager {
       const { error } = await this.supabase
         .from("game_rooms")
         .update({
-          status: "playing",
-          game_state: initialGameState,
+          status: "active",
+          current_game_state: initialGameState,
           updated_at: new Date().toISOString(),
         })
         .eq("id", this.currentRoom.id)
@@ -607,7 +607,7 @@ export class OnlineGameManager {
         throw error
       }
 
-      this.currentRoom = { ...this.currentRoom, status: "playing", game_state: initialGameState }
+      this.currentRoom = { ...this.currentRoom, status: "active", current_game_state: initialGameState }
       this.isGameStarted = true
       console.log("[v0] Game started successfully by player1")
 
@@ -624,7 +624,7 @@ export class OnlineGameManager {
     try {
       const { data: room } = await this.supabase.from("game_rooms").select("*").eq("id", this.currentRoom.id).single()
 
-      return room?.status === "playing" && room?.game_state !== null
+      return room?.status === "active" && room?.current_game_state !== null
     } catch (error) {
       console.error("[v0] Error checking if game is ready:", error)
       return false
@@ -654,9 +654,9 @@ export class OnlineGameManager {
           const updatedRoom = payload.new as GameRoom
           this.currentRoom = updatedRoom
 
-          if (updatedRoom.game_state) {
-            console.log("[v0] Processing game state:", updatedRoom.game_state)
-            this.gameStateCallback?.(updatedRoom.game_state)
+          if (updatedRoom.current_game_state) {
+            console.log("[v0] Processing game state:", updatedRoom.current_game_state)
+            this.gameStateCallback?.(updatedRoom.current_game_state)
           }
         },
       )
