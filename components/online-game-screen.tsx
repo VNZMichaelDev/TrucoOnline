@@ -463,16 +463,20 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           <h1 className="text-sm font-bold text-amber-200">Truco Online</h1>
           {isConnected ? <Wifi className="h-3 w-3 text-green-500" /> : <WifiOff className="h-3 w-3 text-red-500" />}
         </div>
-        <div className="bg-black/70 border border-amber-600 rounded px-2 py-1">
-          <div className="flex items-center gap-3 text-xs">
+        <div className="bg-black/70 border border-amber-600 rounded px-3 py-1">
+          <div className="flex items-center gap-4 text-xs">
             <div className="text-center">
-              <div className="text-amber-200 font-medium">Jugador 1</div>
-              <div className="text-white font-bold">{gameState.players[0]?.score || 0}</div>
+              <div className="text-amber-200 font-medium">{gameState.players[myPlayerIndex]?.name || playerName}</div>
+              <div className="text-white font-bold text-lg">{gameState.players[myPlayerIndex]?.score || 0}</div>
             </div>
-            <div className="text-amber-400">-</div>
+            <div className="text-amber-400 font-bold">vs</div>
             <div className="text-center">
-              <div className="text-amber-200 font-medium">Jugador 2</div>
-              <div className="text-white font-bold">{gameState.players[1]?.score || 0}</div>
+              <div className="text-amber-200 font-medium">{gameState.players[opponentIndex]?.name || opponentName}</div>
+              <div className="text-white font-bold text-lg">{gameState.players[opponentIndex]?.score || 0}</div>
+            </div>
+            <div className="text-amber-300 text-xs ml-2">
+              <div>Objetivo:</div>
+              <div className="font-bold">30 pts</div>
             </div>
           </div>
         </div>
@@ -496,9 +500,20 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           </div>
         </div>
 
-        <div className="flex items-center justify-center h-20 flex-shrink-0">
-          <Card className="bg-black/70 border-amber-600 p-2 w-full max-w-xs">
+        <div className="flex items-center justify-center h-24 flex-shrink-0">
+          <Card className="bg-black/70 border-amber-600 p-3 w-full max-w-sm">
             <CardContent className="p-0">
+              <div className="text-center mb-2">
+                <div className="text-amber-200 text-xs font-medium">
+                  Baza {gameState.currentBaza + 1} de 3
+                  {gameState.bazas.length > 0 && (
+                    <span className="ml-2 text-amber-300">
+                      (Ganadas: Tú {gameState.bazas.filter(b => !b.isParda && b.winner === myPlayerIndex).length} - 
+                      {opponentName} {gameState.bazas.filter(b => !b.isParda && b.winner === opponentIndex).length})
+                    </span>
+                  )}
+                </div>
+              </div>
               <TableDisplay
                 playerCard={playerCard}
                 opponentCard={opponentCard}
