@@ -1,52 +1,64 @@
 import type { Card, Suit, CardValue } from "./types"
 
-// Card hierarchy for Truco (higher number = stronger card)
+// Card hierarchy for Truco Argentino (higher number = stronger card)
+// Based on official rules from trucogame.com
 const TRUCO_VALUES: Record<string, number> = {
-  "espadas-1": 14, // Ancho de Espadas (highest)
-  "bastos-1": 13, // Ancho de Bastos
+  // Top 4 cards (matadores)
+  "espadas-1": 14, // As de Espadas (highest)
+  "bastos-1": 13,  // As de Bastos
   "espadas-7": 12, // Siete de Espadas
-  "oro-7": 11, // Siete de Oro (not "oro-7" but "oro-7" - this was correct)
+  "oro-7": 11,     // Siete de Oro
+  
   // All 3s have same value
   "oro-3": 10,
   "copas-3": 10,
   "espadas-3": 10,
   "bastos-3": 10,
+  
   // All 2s have same value
   "oro-2": 9,
   "copas-2": 9,
   "espadas-2": 9,
   "bastos-2": 9,
+  
   // False aces (1♥, 1♦)
-  "copas-1": 8, // 1♥
-  "oro-1": 8, // 1♦
+  "copas-1": 8,    // As de Copas
+  "oro-1": 8,      // As de Oro
+  
   // All 12s (Kings)
   "oro-12": 7,
   "copas-12": 7,
   "espadas-12": 7,
   "bastos-12": 7,
+  
   // All 11s (Horses)
   "oro-11": 6,
   "copas-11": 6,
   "espadas-11": 6,
   "bastos-11": 6,
+  
   // All 10s (Sotas)
   "oro-10": 5,
   "copas-10": 5,
   "espadas-10": 5,
   "bastos-10": 5,
+  
   // False sevens (7♥, 7♣)
-  "copas-7": 4, // 7♥
-  "bastos-7": 4, // 7♣
+  "copas-7": 4,    // Siete de Copas
+  "bastos-7": 4,   // Siete de Bastos
+  
   // All 6s
   "oro-6": 3,
   "copas-6": 3,
   "espadas-6": 3,
   "bastos-6": 3,
+  
   // All 5s
   "oro-5": 2,
   "copas-5": 2,
   "espadas-5": 2,
   "bastos-5": 2,
+  
   // All 4s (lowest)
   "oro-4": 1,
   "copas-4": 1,
@@ -139,6 +151,7 @@ export function compareCards(card1: Card, card2: Card): number {
   return card1.trucoValue - card2.trucoValue
 }
 
+// Calculate Envido according to official Truco Argentino rules
 export function calculateEnvido(cards: Card[]): number {
   const suitGroups: Record<Suit, Card[]> = {
     espadas: [],
@@ -157,22 +170,32 @@ export function calculateEnvido(cards: Card[]): number {
   // Check each suit for envido points
   Object.values(suitGroups).forEach((suitCards) => {
     if (suitCards.length >= 2) {
-      // Sort by envido value (different from truco value)
+      // Get envido values: cards 1-7 use face value, cards 10-12 (negras) = 0
       const envidoValues = suitCards
         .map((card) => {
-          if (card.value >= 10) return 0 // Figures are worth 0 in envido
+          // Cards 10, 11, 12 (negras) are worth 0 in envido
+          if (card.value >= 10) return 0
+          // Cards 1-7 use their face value
           return card.value
         })
-        .sort((a, b) => b - a)
+        .sort((a, b) => b - a) // Sort descending
 
+      // Envido = 20 + sum of two highest cards of same suit
       const envidoPoints = 20 + envidoValues[0] + envidoValues[1]
       maxEnvido = Math.max(maxEnvido, envidoPoints)
     }
   })
 
-  // If no suit has 2+ cards, return highest card value
+  // If no suit has 2+ cards, return highest single card value
   if (maxEnvido === 0) {
-    const highestCard = Math.max(...cards.map((card) => (card.value >= 10 ? 0 : card.value)))
+    const highestCard = Math.max(
+      ...cards.map((card) => {
+        // Cards 10, 11, 12 (negras) are worth 0 in envido
+        if (card.value >= 10) return 0
+        // Cards 1-7 use their face value
+        return card.value
+      })
+    )
     maxEnvido = highestCard
   }
 

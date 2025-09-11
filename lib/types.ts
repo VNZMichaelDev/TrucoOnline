@@ -19,7 +19,7 @@ export interface Player {
 
 export interface GameState {
   players: [Player, Player]
-  currentPlayer: number | string
+  currentPlayer: number
   phase: "dealing" | "envido" | "truco" | "playing" | "baza-result" | "hand-result" | "finished"
   table: Card[]
   currentBaza: number
@@ -35,6 +35,7 @@ export interface GameState {
   handPoints: number
   envidoPoints: number
   winner?: string
+  currentPlayerId?: string // Device-specific field, not synced
 }
 
 export type GameAction =

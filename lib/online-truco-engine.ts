@@ -44,6 +44,7 @@ export class OnlineTrucoEngine {
       currentBaza: 0,
       lastWinner: 0,
       waitingForResponse: false,
+      pendingAction: null,
       currentPlayerId,
       mano: 0, // Use numeric index for mano
     }
@@ -119,19 +120,22 @@ export class OnlineTrucoEngine {
     const hasPlayedCard = this.gameState.table.length > 0
     // CORREGIDO: Un jugador puede responder cuando NO es su turno Y hay una apuesta pendiente
     const isWaitingForMyResponse = this.gameState.waitingForResponse && !isMyTurn
+    
+    // REGLA OFICIAL: Envido debe cantarse antes que Truco
+    const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
 
     return {
-      canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && !hasPlayedCard,
+      // Truco: solo si no hay envido pendiente o ya fue resuelto
+      canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && !hasPlayedCard && canSingTruco,
       canSingRetruco: isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO",
       canSingValeCuatro: isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO",
-      canSingEnvido:
-        isMyTurn &&
-        !this.gameState.waitingForResponse &&
-        this.gameState.envidoLevel === 0 &&
-        isFirstBaza &&
-        !hasPlayedCard,
+      
+      // Envido: solo en primera baza y antes de jugar cartas
+      canSingEnvido: isMyTurn && !this.gameState.waitingForResponse && this.gameState.envidoLevel === 0 && isFirstBaza && !hasPlayedCard,
       canSingRealEnvido: isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO",
       canSingFaltaEnvido: isWaitingForMyResponse && (this.gameState.envidoLevel === 1 || this.gameState.envidoLevel === 2) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false),
+      
+      // Respuestas: solo cuando el oponente está esperando mi respuesta
       canAccept: isWaitingForMyResponse,
       canReject: isWaitingForMyResponse,
       canGoToDeck: isMyTurn && !this.gameState.waitingForResponse,
@@ -281,12 +285,16 @@ export class OnlineTrucoEngine {
   }
 
   private singTruco(): GameState {
-    if (this.gameState.trucoLevel === 0) {
+    // REGLA OFICIAL: Solo se puede cantar Truco si no hay Envido pendiente
+    const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
+    
+    if (this.gameState.trucoLevel === 0 && canSingTruco) {
       this.gameState.trucoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_TRUCO" }
-      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
-      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      
+      console.log("[v0] Truco cantado - esperando respuesta del oponente")
+      // CRÍTICO: NO cambiar currentPlayer - el oponente debe responder desde su turno
     }
     return this.gameState
   }
@@ -297,8 +305,9 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
-      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
-      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      
+      console.log("[v0] Retruco cantado - esperando respuesta del oponente")
+      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
     }
     return this.gameState
   }
@@ -309,19 +318,22 @@ export class OnlineTrucoEngine {
       this.gameState.trucoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
-      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
-      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      
+      console.log("[v0] Vale Cuatro cantado - esperando respuesta del oponente")
+      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
     }
     return this.gameState
   }
 
   private singEnvido(): GameState {
-    if (this.gameState.envidoLevel === 0 && this.gameState.currentBaza === 0) {
+    // REGLA OFICIAL: Envido solo en primera baza y antes de jugar cartas
+    if (this.gameState.envidoLevel === 0 && this.gameState.currentBaza === 0 && this.gameState.table.length === 0) {
       this.gameState.envidoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_ENVIDO" }
-      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
-      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      
+      console.log("[v0] Envido cantado - esperando respuesta del oponente")
+      // CRÍTICO: NO cambiar currentPlayer - el oponente debe responder desde su turno
     }
     return this.gameState
   }
@@ -332,8 +344,9 @@ export class OnlineTrucoEngine {
       this.gameState.envidoLevel = 2
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
-      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
-      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      
+      console.log("[v0] Real Envido cantado - esperando respuesta del oponente")
+      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
     }
     return this.gameState
   }
@@ -344,8 +357,9 @@ export class OnlineTrucoEngine {
       this.gameState.envidoLevel = 3
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
-      // CORREGIDO: NO cambiar currentPlayer - el oponente debe responder
-      // this.gameState.currentPlayer = 1 - (this.gameState.currentPlayer as number)
+      
+      console.log("[v0] Falta Envido cantado - esperando respuesta del oponente")
+      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
     }
     return this.gameState
   }
@@ -481,18 +495,28 @@ export class OnlineTrucoEngine {
       }
     })
 
-    // Hand ends when someone wins 2 bazas
+    // REGLA OFICIAL: La mano termina cuando alguien gana 2 bazas
     if (bazaWins[0] >= 2 || bazaWins[1] >= 2) {
       return true
     }
 
-    // Special parda cases
+    // REGLA OFICIAL: Si se jugaron las 3 bazas, la mano termina
     if (this.gameState.bazas.length >= 3) {
-      return true // All three bazas played
+      return true
     }
 
-    // If first baza was parda and second baza is decided, hand ends
+    // REGLA OFICIAL: Si primera baza parda y segunda decidida, mano termina
     if (this.gameState.bazas.length >= 2 && this.gameState.bazas[0].isParda && !this.gameState.bazas[1].isParda) {
+      return true
+    }
+
+    // NUEVO: Verificar si algún jugador se quedó sin cartas
+    const player1HasCards = this.gameState.players[0].hand.length > 0
+    const player2HasCards = this.gameState.players[1].hand.length > 0
+    
+    // Si algún jugador no tiene cartas y ya se jugó al menos una baza, terminar mano
+    if ((!player1HasCards || !player2HasCards) && this.gameState.bazas.length > 0) {
+      console.log("[v0] Hand finished - player out of cards")
       return true
     }
 
@@ -615,7 +639,7 @@ export class OnlineTrucoEngine {
 
     let handWinner: number | null = null
 
-    // Determine winner based on bazas won - Reglas oficiales del Truco Argentino
+    // REGLAS OFICIALES: Determinar ganador de la mano
     if (bazaWins[0] >= 2) {
       handWinner = 0
     } else if (bazaWins[1] >= 2) {
@@ -630,31 +654,46 @@ export class OnlineTrucoEngine {
         handWinner = this.gameState.mano as number
       }
     } else {
-      // Todas pardas: gana la mano
-      handWinner = this.gameState.mano as number
+      // NUEVO: Si un jugador se quedó sin cartas, el otro gana
+      const player1HasCards = this.gameState.players[0].hand.length > 0
+      const player2HasCards = this.gameState.players[1].hand.length > 0
+      
+      if (!player1HasCards && player2HasCards) {
+        handWinner = 1 // Player 2 gana porque Player 1 no tiene cartas
+        console.log("[v0] Player 2 wins - Player 1 out of cards")
+      } else if (!player2HasCards && player1HasCards) {
+        handWinner = 0 // Player 1 gana porque Player 2 no tiene cartas
+        console.log("[v0] Player 1 wins - Player 2 out of cards")
+      } else {
+        // Todas pardas: gana la mano
+        handWinner = this.gameState.mano as number
+      }
     }
 
     if (handWinner !== null) {
       let points = 1 // Punto base por ganar la mano
 
-      // Puntos del Truco según nivel
+      // REGLA OFICIAL: Puntos del Truco según nivel (1→2→3→4)
       if (this.gameState.trucoAccepted) {
         points = this.getTrucoPoints()
       }
 
-      // Puntos del Envido (se suman por separado)
+      // REGLA OFICIAL: Puntos del Envido se suman por separado
       if (this.gameState.envidoAccepted) {
         const envidoPoints = this.getEnvidoPoints()
         this.gameState.players[handWinner].score += envidoPoints
+        console.log(`[v0] ${this.gameState.players[handWinner].name} gana ${envidoPoints} puntos de Envido`)
       }
 
       // Sumar puntos de la mano
       this.gameState.players[handWinner].score += points
+      console.log(`[v0] ${this.gameState.players[handWinner].name} gana ${points} puntos de la mano`)
 
-      // Verificar si alguien llegó a 30 puntos (ganar el juego)
+      // REGLA OFICIAL: Verificar si alguien llegó a 30 puntos (ganar el juego)
       if (this.gameState.players[handWinner].score >= 30) {
         this.gameState.phase = "finished"
         this.gameState.winner = this.gameState.players[handWinner].id
+        console.log(`[v0] ¡${this.gameState.players[handWinner].name} gana el juego con ${this.gameState.players[handWinner].score} puntos!`)
       } else {
         this.gameState.phase = "hand-result"
       }
@@ -671,7 +710,7 @@ export class OnlineTrucoEngine {
     this.gameState.waitingForResponse = false
     this.gameState.pendingAction = null
     
-    // Rotar la mano para la siguiente ronda
+    // REGLA OFICIAL: Rotar la mano para la siguiente ronda
     this.gameState.mano = this.gameState.mano === 0 ? 1 : 0
     this.gameState.currentPlayer = this.gameState.mano
   }
