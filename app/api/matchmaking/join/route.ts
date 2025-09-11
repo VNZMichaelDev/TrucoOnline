@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
             player1_id: waitingPlayer.player_id, // El que estaba esperando es player1 (empieza primero)
             player2_id: playerId,
             status: "waiting",
-            game_state: {
+            current_game_state: {
               currentPlayer: 0, // Player1 siempre empieza
               phase: "playing",
               players: [
