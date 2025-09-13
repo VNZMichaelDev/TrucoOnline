@@ -71,13 +71,6 @@ export default function TableDisplay({
                 <span className="text-emerald-300/70 text-xs">...</span>
               </div>
             )}
-            {playerCard && (
-              <div className="absolute inset-0 transform translate-x-2 translate-y-2 hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-10">
-                <div className="scale-75 sm:scale-90 md:scale-100 opacity-80">
-                  <CardComponent card={playerCard} isOnTable />
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -93,13 +86,6 @@ export default function TableDisplay({
             ) : (
               <div className="absolute inset-0 bg-emerald-900/30 border border-dashed border-emerald-400/50 rounded-lg flex items-center justify-center animate-pulse">
                 <span className="text-emerald-300/70 text-xs">Tu turno</span>
-              </div>
-            )}
-            {opponentCard && (
-              <div className="absolute inset-0 transform -translate-x-2 -translate-y-2 hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-10">
-                <div className="scale-75 sm:scale-90 md:scale-100 opacity-80">
-                  <CardComponent card={opponentCard} isOnTable />
-                </div>
               </div>
             )}
           </div>
