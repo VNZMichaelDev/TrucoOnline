@@ -145,6 +145,10 @@ export class OnlineGameManager {
           this.subscribeToGameUpdates()
           this.startGameStatePolling()
           this.statusCallback?.("Partida en curso")
+          
+          // CRÍTICO: Llamar al callback del gameState para inicializar la UI del juego
+          console.log("[v0] Calling gameStateCallback with existing state")
+          this.gameStateCallback?.(room.current_game_state)
           return
         } else {
           // Limpiar cualquier sala que no sea una partida activa
