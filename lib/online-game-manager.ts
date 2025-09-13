@@ -120,6 +120,10 @@ export class OnlineGameManager {
     this.statusCallback?.("Buscando oponente...")
 
     try {
+      // NUEVO: Limpiar mis salas problemáticas ANTES de buscar
+      console.log("[v0] Cleaning up any problematic rooms before matchmaking...")
+      await this.cleanupMyRooms()
+
       // CORREGIDO: Limpiar cola completamente antes de empezar
       await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
       
@@ -131,33 +135,21 @@ export class OnlineGameManager {
         .eq("status", "active") // Solo buscar partidas activas
         .limit(1)
 
+      // Check for existing active game with valid state
       if (existingRooms && existingRooms.length > 0) {
-        const room = existingRooms[0]
-        console.log("[v0] Found existing room:", room.id, "Status:", room.status)
-        
-        // Solo reconectar si es una partida ACTIVA (active) con current_game_state válido
-        if (room.status === "active" && room.current_game_state) {
-          console.log("[v0] Reconnecting to active game")
-          this.currentRoom = room
+        const existingRoom = existingRooms[0]
+        if (existingRoom.current_game_state && Object.keys(existingRoom.current_game_state).length > 0) {
+          console.log("[v0] Found existing game, reconnecting...")
+          this.currentRoom = existingRoom
+          this.isInMatchmaking = false
           this.hasFoundOpponent = true
-          this.isInMatchmaking = false // CRÍTICO: Detener matchmaking
-          this.isGameStarted = true // CRÍTICO: Marcar juego como iniciado
-          this.subscribeToGameUpdates()
-          this.startGameStatePolling()
-          this.statusCallback?.("Partida en curso")
-          
-          // CRÍTICO: Llamar al callback del gameState para inicializar la UI del juego
-          console.log("[v0] Calling gameStateCallback with existing state")
-          this.gameStateCallback?.(room.current_game_state)
+          this.isGameStarted = true
+          this.statusCallback?.("Reconectando a partida...")
           return
-        } else {
-          // Limpiar cualquier sala que no sea una partida activa
-          console.log("[v0] Cleaning up non-active room")
-          await this.supabase.from("game_rooms").delete().eq("id", room.id)
         }
       }
 
-      // CORREGIDO: Buscar oponente con mejor lógica
+      // Buscar oponentes en cola
       const { data: waitingPlayers, error: queueError } = await this.supabase
         .from("matchmaking_queue")
         .select("*")
@@ -166,7 +158,7 @@ export class OnlineGameManager {
         .limit(1)
 
       if (queueError) {
-        console.error("[v0] Error checking queue:", queueError)
+        console.error("[v0] Error fetching waiting players:", queueError)
         throw queueError
       }
 
@@ -522,17 +514,10 @@ export class OnlineGameManager {
     }
   }
 
-  async leaveMatchmaking(): Promise<void> {
+  private async cleanupMyRooms(): Promise<void> {
     if (!this.currentPlayer) return
 
-    this.isInMatchmaking = false
-    this.hasFoundOpponent = false
-    this.isGameStarted = false
-
     try {
-      // CORREGIDO: Limpiar cola y salas completamente al salir
-      await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
-      
       // Limpiar TODAS las salas donde participo que no estén en juego activo
       const { data: myRooms } = await this.supabase
         .from("game_rooms")
@@ -546,11 +531,27 @@ export class OnlineGameManager {
           if (room.status === "waiting" || 
               (room.status === "active" && !room.current_game_state) ||
               (room.status === "active" && room.current_game_state && Object.keys(room.current_game_state).length === 0)) {
-            console.log("[v0] Cleaning up room on exit:", room.id, "Status:", room.status)
+            console.log("[v0] Cleaning up room:", room.id, "Status:", room.status)
             await this.supabase.from("game_rooms").delete().eq("id", room.id)
           }
         }
       }
+    } catch (error) {
+      console.error("[v0] Error cleaning up rooms:", error)
+    }
+  }
+
+  async leaveMatchmaking(): Promise<void> {
+    if (!this.currentPlayer) return
+
+    this.isInMatchmaking = false
+    this.hasFoundOpponent = false
+    this.isGameStarted = false
+
+    try {
+      // CORREGIDO: Limpiar cola y salas completamente al salir
+      await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
+      await this.cleanupMyRooms()
     } catch (error) {
       console.error("[v0] Error leaving matchmaking:", error)
     }
