@@ -530,13 +530,26 @@ export class OnlineGameManager {
     this.isGameStarted = false
 
     try {
-      // CORREGIDO: Limpiar cola y salas vacías al salir
+      // CORREGIDO: Limpiar cola y salas completamente al salir
       await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
       
-      // Limpiar salas waiting sin current_game_state
-      if (this.currentRoom && this.currentRoom.status === "waiting" && !this.currentRoom.current_game_state) {
-        console.log("[v0] Cleaning up waiting room on exit")
-        await this.supabase.from("game_rooms").delete().eq("id", this.currentRoom.id)
+      // Limpiar TODAS las salas donde participo que no estén en juego activo
+      const { data: myRooms } = await this.supabase
+        .from("game_rooms")
+        .select("*")
+        .or(`player1_id.eq.${this.currentPlayer.id},player2_id.eq.${this.currentPlayer.id}`)
+        .neq("status", "finished")
+
+      if (myRooms && myRooms.length > 0) {
+        for (const room of myRooms) {
+          // Solo eliminar si no hay juego activo o si es una sala waiting/active sin estado válido
+          if (room.status === "waiting" || 
+              (room.status === "active" && !room.current_game_state) ||
+              (room.status === "active" && room.current_game_state && Object.keys(room.current_game_state).length === 0)) {
+            console.log("[v0] Cleaning up room on exit:", room.id, "Status:", room.status)
+            await this.supabase.from("game_rooms").delete().eq("id", room.id)
+          }
+        }
       }
     } catch (error) {
       console.error("[v0] Error leaving matchmaking:", error)
