@@ -427,19 +427,28 @@ export class OnlineTrucoEngine {
     const opponentId = this.myPlayerId === "player1" ? "player2" : "player1"
     const opponentIndex = opponentId === "player1" ? 0 : 1
     
-    // CORREGIDO: Irse al mazo da los puntos del truco actual al oponente
-    const points = this.getTrucoPoints()
-    this.gameState.players[opponentIndex].score += points
+    // REGLA OFICIAL: Primero sumar puntos de Envido si los hay
+    if (this.gameState.envidoAccepted && this.gameState.envidoPoints > 0) {
+      // Los puntos de Envido ya se sumaron cuando se resolvió
+      console.log(`[v0] Envido points already added: ${this.gameState.envidoPoints}`)
+    }
     
-    console.log(`[v0] Player went to deck - opponent gets ${points} points`)
+    // REGLA OFICIAL: Luego sumar puntos del Truco según lo que esté aceptado
+    let trucoPoints = 1 // Por defecto 1 punto si no hay Truco aceptado
+    if (this.gameState.trucoAccepted) {
+      trucoPoints = this.getTrucoPoints()
+    }
+    
+    this.gameState.players[opponentIndex].score += trucoPoints
+    console.log(`[v0] Player went to deck - opponent gets ${trucoPoints} points (Truco: ${this.gameState.trucoAccepted ? 'accepted' : 'not accepted'})`)
 
     if (this.gameState.players[opponentIndex].score >= 30) {
       this.gameState.phase = "finished"
       console.log("[v0] Game finished - opponent reached 30 points")
     } else {
-      // CORREGIDO: Iniciar nueva mano inmediatamente
+      // CORREGIDO: Iniciar nueva mano con cartas barajadas
       this.startNewHand()
-      console.log("[v0] Starting new hand after going to deck")
+      console.log("[v0] Starting new hand after going to deck - cards shuffled")
     }
 
     return this.gameState
