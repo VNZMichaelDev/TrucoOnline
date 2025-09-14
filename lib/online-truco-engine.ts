@@ -1,5 +1,5 @@
 import type { GameState, GameAction, BettingState } from "./types"
-import { createDeck, dealCards, compareCards, calculateEnvido } from "./cards"
+import { createDeck, dealCards, compareCards, calculateEnvido, shuffleDeck } from "./cards"
 
 export class OnlineTrucoEngine {
   private gameState: GameState
@@ -185,7 +185,8 @@ export class OnlineTrucoEngine {
       case "GO_TO_DECK":
         return this.goToDeck()
       case "START_NEW_HAND":
-        return this.startNewHand()
+        this.startNewHand()
+        return this.gameState
       case "CONTINUE_AFTER_BAZA":
         return this.continueAfterBaza()
       default:
@@ -296,7 +297,8 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_TRUCO" }
       
       console.log("[v0] Truco cantado - esperando respuesta del oponente")
-      // CRÍTICO: NO cambiar currentPlayer - el oponente debe responder desde su turno
+      // CRÍTICO: El turno se mantiene igual, el oponente responde sin cambiar currentPlayer
+      // Esto permite que el oponente vea los botones de respuesta sin ser "su turno"
     }
     return this.gameState
   }
@@ -331,13 +333,15 @@ export class OnlineTrucoEngine {
 
   private singEnvido(): GameState {
     // REGLA OFICIAL: Envido solo en primera baza y antes de jugar cartas
-    if (this.gameState.envidoLevel === 0 && this.gameState.currentBaza === 0 && this.gameState.table.length === 0) {
+    const anyCardPlayed = this.gameState.bazas.some(baza => baza.cards.length > 0) || this.gameState.table.length > 0
+    
+    if (this.gameState.envidoLevel === 0 && this.gameState.currentBaza === 0 && !anyCardPlayed) {
       this.gameState.envidoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_ENVIDO" }
       
       console.log("[v0] Envido cantado - esperando respuesta del oponente")
-      // CRÍTICO: NO cambiar currentPlayer - el oponente debe responder desde su turno
+      // CRÍTICO: El turno se mantiene igual, el oponente responde sin cambiar currentPlayer
     }
     return this.gameState
   }
@@ -470,6 +474,17 @@ export class OnlineTrucoEngine {
 
     this.gameState.players[envidoWinner].score += points
     this.gameState.envidoPoints = points
+    
+    // NUEVO: Guardar información del Envido para mostrar en UI
+    this.gameState.envidoResult = {
+      player1Points: player1Envido,
+      player2Points: player2Envido,
+      winner: envidoWinner,
+      pointsAwarded: points,
+      showResult: true
+    }
+    
+    console.log(`[v0] Envido resuelto: Player1=${player1Envido}, Player2=${player2Envido}, Ganador=Player${envidoWinner + 1}, Puntos=${points}`)
   }
 
   private getTrucoPoints(): number {
@@ -549,55 +564,34 @@ export class OnlineTrucoEngine {
     return false
   }
 
-  private startNewHand(): GameState {
-    const deck = createDeck()
-    const [player1Hand, player2Hand] = dealCards(deck)
-
-    const newMano = 1 - (this.gameState.mano as number)
-    const startingPlayer = newMano // Mano starts
-
-    this.gameState.players[0].hand = player1Hand
-    this.gameState.players[1].hand = player2Hand
-    this.gameState.table = []
+  private startNewHand(): void {
+    // CORREGIDO: Resetear completamente el estado para nueva mano
     this.gameState.bazas = []
-    this.gameState.trucoLevel = 0
-    this.gameState.trucoAccepted = false
-    this.gameState.envidoLevel = 0
-    this.gameState.envidoAccepted = false
-    this.gameState.envidoPoints = 0
-    this.gameState.handPoints = 1
     this.gameState.currentBaza = 0
-    this.gameState.currentPlayer = startingPlayer
-    this.gameState.lastWinner = startingPlayer
+    this.gameState.table = []
+    this.gameState.trucoLevel = 0
+    this.gameState.envidoLevel = 0
+    this.gameState.trucoAccepted = false
+    this.gameState.envidoAccepted = false
     this.gameState.waitingForResponse = false
     this.gameState.pendingAction = null
+    this.gameState.handPoints = 1
+    this.gameState.envidoPoints = 0
     this.gameState.phase = "playing"
-    this.gameState.mano = newMano
+    
+    // NUEVO: Limpiar resultado del Envido anterior
+    this.gameState.envidoResult = undefined
 
-    console.log("[v0] New hand started - mano:", newMano, "starting player:", startingPlayer)
+    // CORREGIDO: Alternar mano correctamente
+    this.gameState.mano = this.gameState.mano === 0 ? 1 : 0
+    this.gameState.currentPlayer = this.gameState.mano
 
-    return this.gameState
-  }
+    // Barajar y repartir cartas
+    const shuffledDeck = shuffleDeck(createDeck())
+    this.gameState.players[0].hand = shuffledDeck.slice(0, 3)
+    this.gameState.players[1].hand = shuffledDeck.slice(3, 6)
 
-  public canPlayCard(cardIndex: number): boolean {
-    const isMyTurn = this.isMyTurn()
-    const myPlayerIndex = this.myPlayerId === "player1" ? 0 : 1
-    const myPlayer = this.gameState.players[myPlayerIndex]
-
-    if (!myPlayer || !Array.isArray(myPlayer.hand)) {
-      console.log("[v0] Invalid player or hand for card play")
-      return false
-    }
-
-    const canPlay =
-      isMyTurn &&
-      !this.gameState.waitingForResponse &&
-      cardIndex >= 0 &&
-      cardIndex < myPlayer.hand.length &&
-      this.gameState.phase === "playing"
-
-    console.log("[v0] Can play card:", canPlay, "isMyTurn:", isMyTurn, "waiting:", this.gameState.waitingForResponse)
-    return canPlay
+    console.log("[v0] Nueva mano iniciada - Mano:", this.gameState.mano, "Jugador actual:", this.gameState.currentPlayer)
   }
 
   public getPlayerId(): string {

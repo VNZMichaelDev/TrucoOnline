@@ -36,6 +36,13 @@ export interface GameState {
   envidoPoints: number
   winner?: string
   currentPlayerId?: string // Device-specific field, not synced
+  envidoResult?: {
+    player1Points: number
+    player2Points: number
+    winner: number
+    pointsAwarded: number
+    showResult: boolean
+  }
 }
 
 export type GameAction =
