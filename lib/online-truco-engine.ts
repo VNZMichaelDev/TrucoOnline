@@ -265,9 +265,6 @@ export class OnlineTrucoEngine {
       winnerName: isParda ? "Parda" : this.gameState.players[winner].name,
     })
 
-    // CORREGIDO: Mantener las cartas visibles en la mesa hasta que termine la ronda
-    // Las cartas se limpiarán cuando se continúe explícitamente
-
     if (!isParda || this.gameState.currentBaza > 0) {
       this.gameState.lastWinner = winner
     }
@@ -277,14 +274,14 @@ export class OnlineTrucoEngine {
     this.gameState.currentPlayer = winner
     this.gameState.lastWinner = winner
 
-    // CORREGIDO: No cambiar a baza-result, continuar jugando automáticamente
+    // CORREGIDO: Limpiar mesa después de cada baza y continuar
+    this.gameState.table = []
+
     if (this.isHandFinished()) {
       this.finishHand()
     } else {
       // Continuar con la siguiente baza automáticamente
       this.gameState.phase = "playing"
-      // NO limpiar mesa - mantener cartas visibles hasta que termine la mano completa
-      // this.gameState.table = [] 
     }
   }
 
