@@ -108,6 +108,23 @@ export class OnlineTrucoEngine {
     return isMyTurn
   }
 
+  public canPlayCard(cardIndex: number): boolean {
+    const myPlayerIndex = this.myPlayerId === "player1" ? 0 : 1
+    const currentPlayer = this.gameState.players[myPlayerIndex]
+    
+    // Verificar índice válido
+    if (cardIndex < 0 || cardIndex >= currentPlayer.hand.length) {
+      return false
+    }
+    
+    // No se puede jugar carta si hay canto pendiente
+    if (this.gameState.waitingForResponse) {
+      return false
+    }
+    
+    return true
+  }
+
   public getBettingState(): BettingState {
     const isMyTurn = this.isMyTurn()
     const isFirstBaza = this.gameState.currentBaza === 0
@@ -123,7 +140,7 @@ export class OnlineTrucoEngine {
       canSingRetruco: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO"),
       canSingValeCuatro: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO"),
       
-      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayed),
+      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayed && this.gameState.players[0].hand.length === 3 && this.gameState.players[1].hand.length === 3),
       canSingRealEnvido: !!(isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO"),
       canSingFaltaEnvido: !!(isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)),
       
