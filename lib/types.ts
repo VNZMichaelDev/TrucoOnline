@@ -17,25 +17,35 @@ export interface Player {
   isBot: boolean
 }
 
+export type EnvidoPaso = "envido" | "real" | "falta"
+
+export interface PendingCanto {
+  familia: "truco" | "envido" | "flor"
+  nivel: number
+  cantante: number
+  responder: number
+  envidoChain?: EnvidoPaso[]
+}
+
 export interface GameState {
-  players: [Player, Player]
+  players: Player[]
   currentPlayer: number
-  phase: "dealing" | "envido" | "truco" | "playing" | "baza-result" | "hand-result" | "finished"
-  table: Card[]
   currentBaza: number
   bazas: { winner: number; cards: Card[]; isParda?: boolean; winnerName?: string }[]
+  table: Card[]
   trucoLevel: number
   envidoLevel: number
   trucoAccepted: boolean
   envidoAccepted: boolean
-  waitingForResponse: boolean
-  pendingAction: GameAction | null
-  mano: number
-  lastWinner: number | null
+  cantoPendiente: PendingCanto | null
+  envidoCerrado: boolean
+  puedeSubirTruco: number | null
   handPoints: number
   envidoPoints: number
+  mano: number
+  lastWinner: number | null
+  phase: "waiting" | "playing" | "hand-result" | "finished"
   winner?: string
-  currentPlayerId?: string // Device-specific field, not synced
   envidoResult?: {
     player1Points: number
     player2Points: number
@@ -43,6 +53,10 @@ export interface GameState {
     pointsAwarded: number
     showResult: boolean
   }
+  // Campos obsoletos que vamos a eliminar gradualmente
+  waitingForResponse?: boolean
+  pendingAction?: GameAction | null
+  currentPlayerId?: string // Device-specific field, not synced
 }
 
 export type GameAction =
