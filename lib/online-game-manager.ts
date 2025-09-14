@@ -127,41 +127,8 @@ export class OnlineGameManager {
       // CORREGIDO: Limpiar cola completamente antes de empezar
       await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
       
-      // CORREGIDO: Solo verificar partidas ACTIVAS para reconexión
-      const { data: existingRooms } = await this.supabase
-        .from("game_rooms")
-        .select("*")
-        .or(`player1_id.eq.${this.currentPlayer.id},player2_id.eq.${this.currentPlayer.id}`)
-        .eq("status", "active") // Solo buscar partidas activas
-        .limit(1)
-
-      // Check for existing active game with valid state AND both players present
-      if (existingRooms && existingRooms.length > 0) {
-        const existingRoom = existingRooms[0]
-        if (existingRoom.current_game_state && 
-            Object.keys(existingRoom.current_game_state).length > 0 &&
-            existingRoom.player1_id && 
-            existingRoom.player2_id &&
-            existingRoom.status === "active") {
-          console.log("[v0] Found existing REAL game, reconnecting...")
-          this.currentRoom = existingRoom
-          this.isInMatchmaking = false
-          this.hasFoundOpponent = true
-          this.isGameStarted = true
-          
-          // CRÍTICO: Llamar al callback del gameState para inicializar la UI del juego
-          console.log("[v0] Calling gameStateCallback with existing state")
-          this.gameStateCallback?.(existingRoom.current_game_state)
-          
-          this.statusCallback?.("Reconectando a partida...")
-          await this.pollGameState()
-          return
-        } else {
-          // Si la sala existe pero no tiene estado válido, eliminarla
-          console.log("[v0] Found invalid room, cleaning up:", existingRoom.id)
-          await this.supabase.from("game_rooms").delete().eq("id", existingRoom.id)
-        }
-      }
+      // ELIMINADO: Ya no hay reconexión automática - siempre crear partida nueva
+      console.log("[v0] Starting fresh matchmaking - no reconnection")
 
       // Buscar oponentes en cola
       const { data: waitingPlayers, error: queueError } = await this.supabase
