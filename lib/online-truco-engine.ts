@@ -475,13 +475,13 @@ export class OnlineTrucoEngine {
     this.gameState.players[envidoWinner].score += points
     this.gameState.envidoPoints = points
     
-    // NUEVO: Guardar información del Envido para mostrar en UI
+    // Solo mostrar resultado del Envido cuando se acepta y resuelve
     this.gameState.envidoResult = {
       player1Points: player1Envido,
       player2Points: player2Envido,
       winner: envidoWinner,
       pointsAwarded: points,
-      showResult: true
+      showResult: false // No mostrar automáticamente
     }
     
     console.log(`[v0] Envido resuelto: Player1=${player1Envido}, Player2=${player2Envido}, Ganador=Player${envidoWinner + 1}, Puntos=${points}`)
