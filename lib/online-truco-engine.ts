@@ -68,6 +68,10 @@ export class OnlineTrucoEngine {
             : 1
           : syncedState.lastWinner || 0,
       mano: typeof syncedState.mano === "string" ? (syncedState.mano === "player1" ? 0 : 1) : syncedState.mano || 0,
+      // Asegurar que los nuevos campos tengan valores por defecto
+      cantoPendiente: syncedState.cantoPendiente || null,
+      envidoCerrado: syncedState.envidoCerrado || false,
+      puedeSubirTruco: syncedState.puedeSubirTruco || true,
     }
 
     console.log("[v0] Synced state - currentPlayer:", engine.gameState.currentPlayer, "myPlayerId:", currentPlayerId)
@@ -137,7 +141,7 @@ export class OnlineTrucoEngine {
       // Respuestas: solo cuando soy el que debe responder
       canAccept: soyResponder || false,
       canReject: soyResponder || false,
-      canGoToDeck: isMyTurn && !cantoPendiente,
+      canGoToDeck: isMyTurn,
     }
   }
 
@@ -188,11 +192,9 @@ export class OnlineTrucoEngine {
   }
 
   private playCard(cardIndex: number): GameState {
-    const cantoPendiente = this.gameState.cantoPendiente
-    
-    // No se puede jugar carta si hay canto pendiente
-    if (!this.isMyTurn() || cantoPendiente) {
-      console.log("[v0] Cannot play card - not my turn or canto pending")
+    // Solo verificar si es mi turno - permitir jugar cartas normalmente
+    if (!this.isMyTurn()) {
+      console.log("[v0] Cannot play card - not my turn")
       return this.gameState
     }
 
