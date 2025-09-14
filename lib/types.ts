@@ -44,8 +44,10 @@ export interface GameState {
   envidoPoints: number
   mano: number
   lastWinner: number | null
-  phase: "waiting" | "playing" | "hand-result" | "finished"
-  winner?: string
+  phase: "waiting" | "playing" | "hand_finished" | "game_finished"
+  winner?: number
+  gameFinished?: boolean
+  handWinner?: number
   envidoResult?: {
     player1Points: number
     player2Points: number

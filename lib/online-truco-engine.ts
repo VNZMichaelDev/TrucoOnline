@@ -246,21 +246,8 @@ export class OnlineTrucoEngine {
       winner = 0 // First player wins
     } else {
       isParda = true
-
-      // - If first baza is parda, whoever wins second baza wins the hand
-      // - If second baza is parda, whoever won first baza wins the hand
-      // - If all three bazas are parda, the "mano" (hand starter) wins
-      if (this.gameState.currentBaza === 0) {
-        // First baza parda - continue playing, winner will be determined by next baza
-        winner = this.gameState.lastWinner as number // Temporary, will be overridden
-      } else if (this.gameState.currentBaza === 1) {
-        // Second baza parda - first baza winner takes the hand
-        const firstBazaWinner = this.gameState.bazas[0]?.winner ?? (this.gameState.mano as number)
-        winner = firstBazaWinner
-      } else {
-        // Third baza parda - mano (hand starter) wins
-        winner = this.gameState.mano as number
-      }
+      // En caso de parda, el ganador se determina al final de la mano
+      winner = this.gameState.mano as number // Temporal
     }
 
     console.log("[v0] Baza resolved - winner:", winner, "isParda:", isParda, "cards:", this.gameState.table)
@@ -272,22 +259,15 @@ export class OnlineTrucoEngine {
       winnerName: isParda ? "Parda" : this.gameState.players[winner].name,
     })
 
-    if (!isParda || this.gameState.currentBaza > 0) {
-      this.gameState.lastWinner = winner
-    }
-
-    this.gameState.currentBaza++
-    // CORREGIDO: El ganador de la baza inicia la siguiente baza
-    this.gameState.currentPlayer = winner
     this.gameState.lastWinner = winner
-
-    // CORREGIDO: Limpiar mesa después de cada baza y continuar
+    this.gameState.currentBaza++
     this.gameState.table = []
 
     if (this.isHandFinished()) {
       this.finishHand()
     } else {
-      // Continuar con la siguiente baza automáticamente
+      // CORREGIDO: El ganador de la baza inicia la siguiente baza
+      this.gameState.currentPlayer = winner
       this.gameState.phase = "playing"
     }
   }
@@ -422,7 +402,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = null
 
       if (this.gameState.players[opponentIndex].score >= 30) {
-        this.gameState.phase = "finished"
+        this.gameState.phase = "game_finished"
       } else {
         this.startNewHand()
       }
@@ -467,7 +447,7 @@ export class OnlineTrucoEngine {
     console.log(`[v0] Player went to deck - opponent gets ${trucoPoints} points (Truco: ${this.gameState.trucoAccepted ? 'accepted' : 'not accepted'})`)
 
     if (this.gameState.players[opponentIndex].score >= 30) {
-      this.gameState.phase = "finished"
+      this.gameState.phase = "game_finished"
       console.log("[v0] Game finished - opponent reached 30 points")
     } else {
       this.startNewHand()
@@ -595,6 +575,7 @@ export class OnlineTrucoEngine {
     this.gameState.handPoints = 1
     this.gameState.envidoPoints = 0
     this.gameState.phase = "playing"
+    this.gameState.envidoCerrado = false
     
     // NUEVO: Limpiar resultado del Envido anterior
     this.gameState.envidoResult = undefined
@@ -602,6 +583,7 @@ export class OnlineTrucoEngine {
     // CORREGIDO: Alternar mano correctamente
     this.gameState.mano = this.gameState.mano === 0 ? 1 : 0
     this.gameState.currentPlayer = this.gameState.mano
+    this.gameState.lastWinner = null
 
     // Barajar y repartir cartas
     const shuffledDeck = shuffleDeck(createDeck())
@@ -667,44 +649,37 @@ export class OnlineTrucoEngine {
 
   private finishHand(): void {
     const bazaWins = [0, 0]
+    let pardas = 0
 
     this.gameState.bazas.forEach((baza) => {
-      if (!baza.isParda) {
+      if (baza.isParda) {
+        pardas++
+      } else {
         bazaWins[baza.winner]++
       }
     })
 
-    let handWinner: number | null = null
+    let handWinner: number
 
-    // REGLAS OFICIALES: Determinar ganador de la mano
+    // REGLA OFICIAL: Determinar ganador de la mano
     if (bazaWins[0] >= 2) {
       handWinner = 0
     } else if (bazaWins[1] >= 2) {
       handWinner = 1
-    } else if (bazaWins[0] === 1 && bazaWins[1] === 1) {
-      // 1-1 con parda: gana quien ganó la primera baza
-      const firstBaza = this.gameState.bazas.find(b => !b.isParda)
-      if (firstBaza) {
-        handWinner = firstBaza.winner
-      } else {
-        // Todas pardas: gana la mano
-        handWinner = this.gameState.mano as number
-      }
+    } else if (pardas === 3) {
+      // Todas las bazas son pardas - gana la mano
+      handWinner = this.gameState.mano as number
+    } else if (pardas === 2) {
+      // Dos pardas y una ganada - gana quien ganó la baza no parda
+      const nonPardaBaza = this.gameState.bazas.find((baza) => !baza.isParda)
+      handWinner = nonPardaBaza?.winner ?? (this.gameState.mano as number)
+    } else if (pardas === 1 && bazaWins[0] === 1 && bazaWins[1] === 1) {
+      // Una parda y cada jugador ganó una - gana quien ganó la primera baza no parda
+      const firstNonPardaBaza = this.gameState.bazas.find((baza) => !baza.isParda)
+      handWinner = firstNonPardaBaza?.winner ?? (this.gameState.mano as number)
     } else {
-      // NUEVO: Si un jugador se quedó sin cartas, el otro gana
-      const player1HasCards = this.gameState.players[0].hand.length > 0
-      const player2HasCards = this.gameState.players[1].hand.length > 0
-      
-      if (!player1HasCards && player2HasCards) {
-        handWinner = 1 // Player 2 gana porque Player 1 no tiene cartas
-        console.log("[v0] Player 2 wins - Player 1 out of cards")
-      } else if (!player2HasCards && player1HasCards) {
-        handWinner = 0 // Player 1 gana porque Player 2 no tiene cartas
-        console.log("[v0] Player 1 wins - Player 2 out of cards")
-      } else {
-        // Todas pardas: gana la mano
-        handWinner = this.gameState.mano as number
-      }
+      // Caso por defecto - gana la mano
+      handWinner = this.gameState.mano as number
     }
 
     if (handWinner !== null) {
@@ -728,11 +703,11 @@ export class OnlineTrucoEngine {
 
       // REGLA OFICIAL: Verificar si alguien llegó a 30 puntos (ganar el juego)
       if (this.gameState.players[handWinner].score >= 30) {
-        this.gameState.phase = "finished"
-        this.gameState.winner = this.gameState.players[handWinner].id
+        this.gameState.phase = "game_finished"
+        this.gameState.winner = handWinner
         console.log(`[v0] ¡${this.gameState.players[handWinner].name} gana el juego con ${this.gameState.players[handWinner].score} puntos!`)
       } else {
-        this.gameState.phase = "hand-result"
+        this.gameState.phase = "hand_finished"
       }
     }
 
