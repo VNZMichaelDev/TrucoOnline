@@ -13,6 +13,7 @@ import TableDisplay from "@/components/ui/table-display"
 import CardBack from "@/components/ui/card-back"
 import GameActions from "@/components/game-actions"
 import GameMessages from "@/components/game-messages"
+import EnvidoResultModal from "@/components/envido-result-modal"
 import type { GameState, GameAction } from "@/lib/types"
 
 interface OnlineGameScreenProps {
@@ -583,6 +584,25 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           </div>
         </div>
       </div>
+
+      {/* Modal de resultado del Envido */}
+      {gameState?.envidoResult?.showResult && (
+        <EnvidoResultModal
+          player1Name={gameEngine?.getCurrentPlayer()?.name || "Jugador 1"}
+          player2Name={gameEngine?.getOpponent()?.name || "Jugador 2"}
+          player1Points={gameState.envidoResult.player1Points}
+          player2Points={gameState.envidoResult.player2Points}
+          winner={gameState.envidoResult.winner}
+          pointsAwarded={gameState.envidoResult.pointsAwarded}
+          onClose={() => {
+            if (gameEngine && gameState) {
+              const newState = { ...gameState }
+              newState.envidoResult = { ...gameState.envidoResult, showResult: false }
+              setGameState(newState)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
