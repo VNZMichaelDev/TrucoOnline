@@ -135,6 +135,7 @@ export class OnlineTrucoEngine {
       canSingValeCuatro: isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO",
       
       // ENVIDO: SOLO en primera baza, ANTES de cualquier carta, y SOLO UNA VEZ por mano
+      // Si ya se jugó una carta o pasó la primera baza, los botones de Envido desaparecen
       canSingEnvido: isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayed,
       canSingRealEnvido: isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO",
       canSingFaltaEnvido: isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false),
@@ -308,7 +309,8 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
       
       console.log("[v0] Retruco cantado - esperando respuesta del oponente")
-      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
+      // CRÍTICO: Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
@@ -321,7 +323,8 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
       
       console.log("[v0] Vale Cuatro cantado - esperando respuesta del oponente")
-      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
+      // CRÍTICO: Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
@@ -347,7 +350,8 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
       
       console.log("[v0] Real Envido cantado - esperando respuesta del oponente")
-      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
+      // CRÍTICO: Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
@@ -360,7 +364,8 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
       
       console.log("[v0] Falta Envido cantado - esperando respuesta del oponente")
-      // CRÍTICO: NO cambiar currentPlayer - el oponente original debe responder
+      // CRÍTICO: Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
