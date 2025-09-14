@@ -61,8 +61,8 @@ export default function TableDisplay({
           </div>
           <div className="relative w-16 h-24 sm:w-20 sm:h-28">
             {opponentCard ? (
-              <div className="absolute inset-0 transform hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-20">
-                <div className="scale-75 sm:scale-90 md:scale-100">
+              <div className="absolute inset-0 transform transition-all duration-300 drop-shadow-lg z-20">
+                <div className="scale-75 sm:scale-90 md:scale-100 transform -rotate-2">
                   <CardComponent card={opponentCard} isOnTable />
                 </div>
               </div>
@@ -78,8 +78,8 @@ export default function TableDisplay({
         <div className="absolute bottom-3 sm:bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2">
           <div className="relative w-16 h-24 sm:w-20 sm:h-28">
             {playerCard ? (
-              <div className="absolute inset-0 transform hover:scale-105 sm:hover:scale-110 transition-all duration-200 drop-shadow-lg z-20">
-                <div className="scale-75 sm:scale-90 md:scale-100">
+              <div className="absolute inset-0 transform transition-all duration-300 drop-shadow-lg z-20">
+                <div className="scale-75 sm:scale-90 md:scale-100 transform rotate-1">
                   <CardComponent card={playerCard} isOnTable />
                 </div>
               </div>
