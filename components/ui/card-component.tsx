@@ -40,6 +40,10 @@ export default function CardComponent({
         alt={getCardDisplayName(card)}
         className="w-full h-full object-cover rounded-lg shadow-lg border-2 border-amber-600/50"
         loading="lazy"
+        onError={(e: any) => {
+          console.error("Error loading card image:", card.imageUrl)
+          e.currentTarget.src = "/placeholder.svg"
+        }}
       />
       {isSelected && <div className="absolute inset-0 bg-amber-400/30 rounded-lg border-2 border-amber-300" />}
     </div>
