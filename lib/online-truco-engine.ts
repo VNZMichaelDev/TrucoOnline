@@ -125,7 +125,7 @@ export class OnlineTrucoEngine {
     const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
 
     return {
-      // Truco: solo si no hay envido pendiente o ya fue resuelto
+      // Truco: puede cantarse en cualquier baza antes de jugar carta
       canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && !hasPlayedCard && canSingTruco,
       canSingRetruco: isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO",
       canSingValeCuatro: isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO",
