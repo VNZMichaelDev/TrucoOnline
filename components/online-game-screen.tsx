@@ -13,7 +13,7 @@ import TableDisplay from "@/components/ui/table-display"
 import CardBack from "@/components/ui/card-back"
 import GameActions from "@/components/game-actions"
 import GameMessages from "@/components/game-messages"
-import EnvidoResultModal from "@/components/envido-result-modal"
+import GameNotifications, { useGameNotifications } from "@/components/game-notifications"
 import type { GameState, GameAction } from "@/lib/types"
 
 interface OnlineGameScreenProps {
@@ -37,6 +37,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
   const [gameReady, setGameReady] = useState(false)
 
   const { playSound, startBackgroundMusic, stopBackgroundMusic } = useAudio()
+  const { notifications, removeNotification, showEnvidoResult, showCantoNotification, showTurnNotification } = useGameNotifications()
 
   useEffect(() => {
     if (!user) {
@@ -183,12 +184,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     } else {
       if (!isMyTurnNow) {
         console.log("[v0] Not my turn, cannot perform action:", action.type)
-        setMessage("No es tu turno")
+        showTurnNotification("No es tu turno")
         return
       }
       if (isWaitingForResponse) {
         console.log("[v0] Waiting for response, cannot perform action:", action.type)
-        setMessage("Esperando respuesta del enemigo")
+        showTurnNotification("Esperando respuesta del enemigo")
         return
       }
     }
@@ -211,17 +212,44 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           playSound("cardPlay")
           break
         case "SING_TRUCO":
+          playSound("truco")
+          showCantoNotification(playerName, "Truco")
+          break
         case "SING_RETRUCO":
+          playSound("truco")
+          showCantoNotification(playerName, "Retruco")
+          break
         case "SING_VALE_CUATRO":
           playSound("truco")
+          showCantoNotification(playerName, "Vale Cuatro")
           break
         case "SING_ENVIDO":
+          playSound("envido")
+          showCantoNotification(playerName, "Envido")
+          break
         case "SING_REAL_ENVIDO":
+          playSound("envido")
+          showCantoNotification(playerName, "Real Envido")
+          break
         case "SING_FALTA_ENVIDO":
           playSound("envido")
+          showCantoNotification(playerName, "Falta Envido")
           break
         case "ACCEPT":
           console.log("[v0] ACCEPT processed - forcing state sync")
+          // Mostrar resultado del Envido si se resolvió
+          if (newState.envidoResult && newState.envidoResult.player1Points !== undefined) {
+            const player1Name = gameEngine.getCurrentPlayer()?.name || "Jugador 1"
+            const player2Name = gameEngine.getOpponent()?.name || "Jugador 2"
+            showEnvidoResult(
+              player1Name,
+              player2Name,
+              newState.envidoResult.player1Points,
+              newState.envidoResult.player2Points,
+              newState.envidoResult.winner,
+              newState.envidoResult.pointsAwarded
+            )
+          }
           // Force immediate UI update after accepting bet
           setTimeout(() => {
             setGameState({ ...newState })
@@ -585,24 +613,11 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
         </div>
       </div>
 
-      {/* Modal de resultado del Envido */}
-      {gameState?.envidoResult?.showResult && (
-        <EnvidoResultModal
-          player1Name={gameEngine?.getCurrentPlayer()?.name || "Jugador 1"}
-          player2Name={gameEngine?.getOpponent()?.name || "Jugador 2"}
-          player1Points={gameState.envidoResult.player1Points}
-          player2Points={gameState.envidoResult.player2Points}
-          winner={gameState.envidoResult.winner}
-          pointsAwarded={gameState.envidoResult.pointsAwarded}
-          onClose={() => {
-            if (gameEngine && gameState) {
-              const newState = { ...gameState }
-              newState.envidoResult = { ...gameState.envidoResult, showResult: false }
-              setGameState(newState)
-            }
-          }}
-        />
-      )}
+      {/* Sistema de notificaciones */}
+      <GameNotifications 
+        notifications={notifications}
+        onRemove={removeNotification}
+      />
     </div>
   )
 }
