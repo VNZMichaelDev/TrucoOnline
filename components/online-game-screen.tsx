@@ -219,6 +219,16 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
         case "SING_FALTA_ENVIDO":
           playSound("envido")
           break
+        case "ACCEPT":
+          console.log("[v0] ACCEPT processed - forcing state sync")
+          // Force immediate UI update after accepting bet
+          setTimeout(() => {
+            setGameState({ ...newState })
+          }, 100)
+          break
+        case "REJECT":
+          console.log("[v0] REJECT processed - forcing state sync")
+          break
       }
 
       updateMessage(action, newState)
