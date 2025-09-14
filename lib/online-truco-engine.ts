@@ -133,7 +133,7 @@ export class OnlineTrucoEngine {
       // Envido: solo en primera baza y antes de jugar cartas
       canSingEnvido: isMyTurn && !this.gameState.waitingForResponse && this.gameState.envidoLevel === 0 && isFirstBaza && !hasPlayedCard,
       canSingRealEnvido: isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO",
-      canSingFaltaEnvido: isWaitingForMyResponse && (this.gameState.envidoLevel === 1 || this.gameState.envidoLevel === 2) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false),
+      canSingFaltaEnvido: isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false),
       
       // Respuestas: solo cuando el oponente está esperando mi respuesta
       canAccept: isWaitingForMyResponse,
@@ -422,14 +422,20 @@ export class OnlineTrucoEngine {
   private goToDeck(): GameState {
     const opponentId = this.myPlayerId === "player1" ? "player2" : "player1"
     const opponentIndex = opponentId === "player1" ? 0 : 1
-    const points = this.gameState.trucoAccepted ? this.getTrucoPoints() : 1
-
+    
+    // CORREGIDO: Irse al mazo da los puntos del truco actual al oponente
+    const points = this.getTrucoPoints()
     this.gameState.players[opponentIndex].score += points
+    
+    console.log(`[v0] Player went to deck - opponent gets ${points} points`)
 
     if (this.gameState.players[opponentIndex].score >= 30) {
       this.gameState.phase = "finished"
+      console.log("[v0] Game finished - opponent reached 30 points")
     } else {
-      this.gameState.phase = "hand-result"
+      // CORREGIDO: Iniciar nueva mano inmediatamente
+      this.startNewHand()
+      console.log("[v0] Starting new hand after going to deck")
     }
 
     return this.gameState
