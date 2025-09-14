@@ -67,12 +67,48 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       await gameManager.createOrGetPlayer(playerName, deviceId)
       setIsPlayerInitialized(true)
 
-      gameManager.setStatusCallback((newStatus) => {
+      gameManager.setStatusCallback((newStatus: string) => {
         console.log("[v0] Status update:", newStatus)
         setStatus(newStatus)
       })
 
-      gameManager.setGameStateCallback(async (newGameState) => {
+      const handleGameStateChange = (newGameState: GameState) => {
+        console.log("[v0] Game state changed:", newGameState)
+        setGameState(newGameState)
+        
+        // Verificar si el juego terminó
+        if (newGameState.phase === "game_finished" && newGameState.winner !== undefined) {
+          const myPlayerIndex = gameEngine?.getMyPlayerIndex() ?? 0
+          const isWinner = newGameState.winner === myPlayerIndex
+          
+          if (isWinner) {
+            showTurnNotification("¡GANASTE! ")
+          } else {
+            showTurnNotification("Perdiste ")
+          }
+          
+          // Cerrar la sala automáticamente después de 3 segundos
+          setTimeout(() => {
+            handleBackToMenu()
+          }, 3000)
+        }
+        
+        // Mostrar notificaciones para resultados de Envido
+        if (newGameState.envidoResult?.showResult) {
+          const player1Name = gameEngine?.getCurrentPlayer()?.name || "Jugador 1"
+          const player2Name = gameEngine?.getOpponent()?.name || "Jugador 2"
+          showEnvidoResult(
+            player1Name,
+            player2Name,
+            newGameState.envidoResult.player1Points,
+            newGameState.envidoResult.player2Points,
+            newGameState.envidoResult.winner,
+            newGameState.envidoResult.pointsAwarded
+          )
+        }
+      }
+
+      gameManager.setGameStateCallback(async (newGameState: any) => {
         console.log("[v0] Received game state update:", newGameState)
 
         if (newGameState && newGameState.players) {
@@ -357,16 +393,14 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       )
 
       if (!isMyTurnNow) {
-        setMessage("No es tu turno")
+        showTurnNotification("No es tu turno")
       } else if (isWaitingForResponse) {
-        setMessage("Esperando respuesta del enemigo")
+        showTurnNotification("Esperando respuesta del enemigo")
       } else if (!canPlay) {
-        setMessage("No puedes jugar esta carta")
+        showTurnNotification("No puedes jugar esta carta")
       } else if (isProcessing) {
-        setMessage("Procesando jugada...")
+        showTurnNotification("Procesando jugada...")
       }
-
-      setTimeout(() => setMessage(""), 2000)
     }
   }
 
@@ -601,7 +635,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
               </Button>
             )}
 
-            {gameState.phase === "finished" && (
+            {gameState.phase === "game_finished" && (
               <Button
                 onClick={handleBackToMenu}
                 className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-8 text-xs rounded-lg mt-1"
