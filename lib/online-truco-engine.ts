@@ -135,12 +135,22 @@ export class OnlineTrucoEngine {
     const envidoAlreadySung = this.gameState.envidoLevel > 0 || this.gameState.envidoAccepted
     const anyCardPlayed = this.gameState.bazas.some(baza => baza.cards.length > 0) || hasPlayedCard
 
+    console.log("[v0] BettingState Debug:", {
+      isMyTurn,
+      trucoLevel: this.gameState.trucoLevel,
+      envidoLevel: this.gameState.envidoLevel,
+      waitingForResponse: this.gameState.waitingForResponse,
+      isWaitingForMyResponse,
+      pendingAction: this.gameState.pendingAction?.type,
+      envidoCerrado: this.gameState.envidoCerrado
+    })
+
     return {
       canSingTruco: !!(isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && canSingTruco),
       canSingRetruco: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO"),
       canSingValeCuatro: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO"),
       
-      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayed && this.gameState.players[0].hand.length === 3 && this.gameState.players[1].hand.length === 3),
+      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && !this.gameState.envidoCerrado && isFirstBaza && !anyCardPlayed && this.gameState.players[0].hand.length === 3 && this.gameState.players[1].hand.length === 3),
       canSingRealEnvido: !!(isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO"),
       canSingFaltaEnvido: !!(isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)),
       
@@ -294,8 +304,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
       
       console.log("[v0] Retruco cantado - esperando respuesta del oponente")
-      // Cambiar el turno al oponente original para que pueda responder
-      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
+      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
     }
     return this.gameState
   }
@@ -308,8 +317,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
       
       console.log("[v0] Vale Cuatro cantado - esperando respuesta del oponente")
-      // Cambiar el turno al oponente original para que pueda responder
-      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
+      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
     }
     return this.gameState
   }
@@ -336,8 +344,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
       
       console.log("[v0] Real Envido cantado - esperando respuesta del oponente")
-      // Cambiar el turno al oponente original para que pueda responder
-      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
+      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
     }
     return this.gameState
   }
@@ -350,8 +357,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
       
       console.log("[v0] Falta Envido cantado - esperando respuesta del oponente")
-      // Cambiar el turno al oponente original para que pueda responder
-      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
+      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
     }
     return this.gameState
   }
