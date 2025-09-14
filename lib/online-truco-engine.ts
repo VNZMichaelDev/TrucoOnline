@@ -123,15 +123,19 @@ export class OnlineTrucoEngine {
     
     // REGLA OFICIAL: Envido debe cantarse antes que Truco
     const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
+    
+    // REGLA OFICIAL: Envido solo se puede cantar UNA vez por mano y solo en primera baza
+    const envidoAlreadySung = this.gameState.envidoLevel > 0 || this.gameState.envidoAccepted
+    const anyCardPlayed = this.gameState.bazas.some(baza => baza.cards.length > 0) || hasPlayedCard
 
     return {
-      // Truco: puede cantarse en cualquier baza antes de jugar carta
-      canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && !hasPlayedCard && canSingTruco,
+      // TRUCO: puede cantarse en CUALQUIER momento, aunque ya se hayan tirado cartas
+      canSingTruco: isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && canSingTruco,
       canSingRetruco: isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO",
       canSingValeCuatro: isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO",
       
-      // Envido: solo en primera baza y antes de jugar cartas
-      canSingEnvido: isMyTurn && !this.gameState.waitingForResponse && this.gameState.envidoLevel === 0 && isFirstBaza && !hasPlayedCard,
+      // ENVIDO: SOLO en primera baza, ANTES de cualquier carta, y SOLO UNA VEZ por mano
+      canSingEnvido: isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayed,
       canSingRealEnvido: isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO",
       canSingFaltaEnvido: isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false),
       
