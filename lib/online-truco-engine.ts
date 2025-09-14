@@ -371,15 +371,20 @@ export class OnlineTrucoEngine {
       if (action.type.includes("TRUCO") || action.type.includes("RETRUCO") || action.type.includes("VALE")) {
         this.gameState.trucoAccepted = true
         this.gameState.handPoints = this.getTrucoPoints()
+        console.log("[v0] Truco accepted - hand points now:", this.gameState.handPoints)
       }
 
       if (action.type.includes("ENVIDO")) {
         this.gameState.envidoAccepted = true
         this.resolveEnvido()
+        console.log("[v0] Envido accepted and resolved")
       }
 
+      // CRÍTICO: Limpiar estado de espera y continuar el juego
       this.gameState.waitingForResponse = false
       this.gameState.pendingAction = null
+      
+      console.log("[v0] Bet accepted - game continues normally")
     }
 
     return this.gameState
