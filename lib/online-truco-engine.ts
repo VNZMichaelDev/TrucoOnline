@@ -110,51 +110,35 @@ export class OnlineTrucoEngine {
 
   public getBettingState(): BettingState {
     const isMyTurn = this.isMyTurn()
-    const myPlayerIndex = this.getMyPlayerIndex()
     const isFirstBaza = this.gameState.currentBaza === 0
     const hasPlayedCard = this.gameState.table.length > 0
+    const isWaitingForMyResponse = this.gameState.waitingForResponse && !isMyTurn
     
-    // NUEVA LÓGICA: Basada en cantoPendiente como en el código de referencia
-    const cantoPendiente = this.gameState.cantoPendiente
-    const soyResponder = cantoPendiente && cantoPendiente.responder === myPlayerIndex
-    const envidoCerrado = this.gameState.envidoCerrado || false
-    
-    // REGLA OFICIAL: Envido solo se puede cantar UNA vez por mano y solo en primera baza
+    const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
+    const envidoAlreadySung = this.gameState.envidoLevel > 0 || this.gameState.envidoAccepted
     const anyCardPlayed = this.gameState.bazas.some(baza => baza.cards.length > 0) || hasPlayedCard
-    
-    // Condiciones para cantar
-    const puedeCantar = isMyTurn && !cantoPendiente
-    const puedeEnvido = puedeCantar && !envidoCerrado && isFirstBaza && !anyCardPlayed && this.gameState.players[0].hand.length === 3 && this.gameState.players[1].hand.length === 3
-    const puedeTruco = puedeCantar && (this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted)
 
     return {
-      // TRUCO: puede cantarse si no hay Envido pendiente
-      canSingTruco: puedeTruco && this.gameState.trucoLevel === 0,
-      canSingRetruco: !!(soyResponder && cantoPendiente?.familia === "truco" && cantoPendiente.nivel === 1),
-      canSingValeCuatro: !!(soyResponder && cantoPendiente?.familia === "truco" && cantoPendiente.nivel === 2),
+      canSingTruco: !!(isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && canSingTruco),
+      canSingRetruco: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO"),
+      canSingValeCuatro: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO"),
       
-      // ENVIDO: SOLO en primera baza, ANTES de cualquier carta, y SOLO UNA VEZ por mano
-      canSingEnvido: puedeEnvido,
-      canSingRealEnvido: !!(soyResponder && cantoPendiente?.familia === "envido" && cantoPendiente.envidoChain?.includes("envido") && !cantoPendiente.envidoChain?.includes("real")),
-      canSingFaltaEnvido: !!(soyResponder && cantoPendiente?.familia === "envido" && !cantoPendiente.envidoChain?.includes("falta")),
+      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayed),
+      canSingRealEnvido: !!(isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO"),
+      canSingFaltaEnvido: !!(isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)),
       
-      // Respuestas: solo cuando soy el que debe responder
-      canAccept: soyResponder || false,
-      canReject: soyResponder || false,
-      canGoToDeck: isMyTurn,
+      canAccept: !!isWaitingForMyResponse,
+      canReject: !!isWaitingForMyResponse,
+      canGoToDeck: !!(isMyTurn && !this.gameState.waitingForResponse),
     }
   }
 
   public processAction(action: GameAction): GameState {
     const isMyTurn = this.isMyTurn()
-    const myPlayerIndex = this.getMyPlayerIndex()
-    const cantoPendiente = this.gameState.cantoPendiente
-    const soyResponder = cantoPendiente && cantoPendiente.responder === myPlayerIndex
     const isResponse = action.type === "ACCEPT" || action.type === "REJECT"
 
-    // Validar si puedo hacer esta acción
-    if (!isMyTurn && !soyResponder) {
-      console.log("[v0] Not my turn and not responder, ignoring action:", action.type)
+    if (!isMyTurn && !isResponse) {
+      console.log("[v0] Not my turn, ignoring action:", action.type, "currentPlayer:", this.gameState.currentPlayer)
       return this.gameState
     }
 
@@ -292,18 +276,13 @@ export class OnlineTrucoEngine {
   }
 
   private singTruco(): GameState {
-    const myPlayerIndex = this.getMyPlayerIndex()
-    const opponentIndex = 1 - myPlayerIndex
+    // REGLA OFICIAL: Solo se puede cantar Truco si no hay Envido pendiente
+    const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
     
-    // Solo se puede cantar si no hay canto pendiente y no hay Envido sin cerrar
-    if (!this.gameState.cantoPendiente && !this.gameState.envidoCerrado) {
-      this.gameState.cantoPendiente = {
-        familia: "truco",
-        nivel: 1,
-        cantante: myPlayerIndex,
-        responder: opponentIndex,
-        envidoChain: []
-      }
+    if (this.gameState.trucoLevel === 0 && canSingTruco) {
+      this.gameState.trucoLevel = 1
+      this.gameState.waitingForResponse = true
+      this.gameState.pendingAction = { type: "SING_TRUCO" }
       
       console.log("[v0] Truco cantado - esperando respuesta del oponente")
     }
@@ -311,52 +290,41 @@ export class OnlineTrucoEngine {
   }
 
   private singRetruco(): GameState {
-    const myPlayerIndex = this.getMyPlayerIndex()
-    const cantoPendiente = this.gameState.cantoPendiente
-    
     // Solo se puede cantar retruco como respuesta a truco
-    if (cantoPendiente && cantoPendiente.familia === "truco" && cantoPendiente.nivel === 1 && cantoPendiente.responder === myPlayerIndex) {
-      cantoPendiente.nivel = 2
-      cantoPendiente.cantante = myPlayerIndex
-      cantoPendiente.responder = 1 - myPlayerIndex
+    if (this.gameState.trucoLevel === 1 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_TRUCO") {
+      this.gameState.trucoLevel = 2
+      this.gameState.waitingForResponse = true
+      this.gameState.pendingAction = { type: "SING_RETRUCO" }
       
       console.log("[v0] Retruco cantado - esperando respuesta del oponente")
+      // Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
 
   private singValeCuatro(): GameState {
-    const myPlayerIndex = this.getMyPlayerIndex()
-    const cantoPendiente = this.gameState.cantoPendiente
-    
     // Solo se puede cantar vale cuatro como respuesta a retruco
-    if (cantoPendiente && cantoPendiente.familia === "truco" && cantoPendiente.nivel === 2 && cantoPendiente.responder === myPlayerIndex) {
-      cantoPendiente.nivel = 3
-      cantoPendiente.cantante = myPlayerIndex
-      cantoPendiente.responder = 1 - myPlayerIndex
+    if (this.gameState.trucoLevel === 2 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_RETRUCO") {
+      this.gameState.trucoLevel = 3
+      this.gameState.waitingForResponse = true
+      this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
       
       console.log("[v0] Vale Cuatro cantado - esperando respuesta del oponente")
+      // Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
 
   private singEnvido(): GameState {
-    const myPlayerIndex = this.getMyPlayerIndex()
-    const opponentIndex = 1 - myPlayerIndex
-    
-    // REGLA OFICIAL: Envido solo en primera baza, antes de jugar cartas, y solo una vez por mano
+    // REGLA OFICIAL: Envido solo en primera baza y antes de jugar cartas
     const anyCardPlayed = this.gameState.bazas.some(baza => baza.cards.length > 0) || this.gameState.table.length > 0
-    const isFirstBaza = this.gameState.currentBaza === 0
-    const fullHands = this.gameState.players[0].hand.length === 3 && this.gameState.players[1].hand.length === 3
     
-    if (!this.gameState.cantoPendiente && !this.gameState.envidoCerrado && isFirstBaza && !anyCardPlayed && fullHands) {
-      this.gameState.cantoPendiente = {
-        familia: "envido",
-        nivel: 1,
-        cantante: myPlayerIndex,
-        responder: opponentIndex,
-        envidoChain: ["envido"]
-      }
+    if (this.gameState.envidoLevel === 0 && this.gameState.currentBaza === 0 && !anyCardPlayed) {
+      this.gameState.envidoLevel = 1
+      this.gameState.waitingForResponse = true
+      this.gameState.pendingAction = { type: "SING_ENVIDO" }
       
       console.log("[v0] Envido cantado - esperando respuesta del oponente")
     }
@@ -364,98 +332,85 @@ export class OnlineTrucoEngine {
   }
 
   private singRealEnvido(): GameState {
-    const myPlayerIndex = this.getMyPlayerIndex()
-    const cantoPendiente = this.gameState.cantoPendiente
-    
     // Solo se puede cantar real envido como respuesta a envido
-    if (cantoPendiente && cantoPendiente.familia === "envido" && cantoPendiente.responder === myPlayerIndex && cantoPendiente.envidoChain?.includes("envido") && !cantoPendiente.envidoChain?.includes("real")) {
-      cantoPendiente.envidoChain.push("real")
-      cantoPendiente.cantante = myPlayerIndex
-      cantoPendiente.responder = 1 - myPlayerIndex
+    if (this.gameState.envidoLevel === 1 && this.gameState.waitingForResponse && this.gameState.pendingAction?.type === "SING_ENVIDO") {
+      this.gameState.envidoLevel = 2
+      this.gameState.waitingForResponse = true
+      this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
       
       console.log("[v0] Real Envido cantado - esperando respuesta del oponente")
+      // Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
 
   private singFaltaEnvido(): GameState {
-    const myPlayerIndex = this.getMyPlayerIndex()
-    const cantoPendiente = this.gameState.cantoPendiente
-    
     // Solo se puede cantar falta envido como respuesta a envido o real envido
-    if (cantoPendiente && cantoPendiente.familia === "envido" && cantoPendiente.responder === myPlayerIndex && cantoPendiente.envidoChain && !cantoPendiente.envidoChain.includes("falta")) {
-      cantoPendiente.envidoChain.push("falta")
-      cantoPendiente.cantante = myPlayerIndex
-      cantoPendiente.responder = 1 - myPlayerIndex
+    if ((this.gameState.envidoLevel === 1 || this.gameState.envidoLevel === 2) && this.gameState.waitingForResponse && this.gameState.pendingAction?.type?.includes("ENVIDO")) {
+      this.gameState.envidoLevel = 3
+      this.gameState.waitingForResponse = true
+      this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
       
       console.log("[v0] Falta Envido cantado - esperando respuesta del oponente")
+      // Cambiar el turno al oponente original para que pueda responder
+      this.gameState.currentPlayer = this.gameState.currentPlayer === 0 ? 1 : 0
     }
     return this.gameState
   }
 
   private acceptBet(): GameState {
-    const cantoPendiente = this.gameState.cantoPendiente
-    const myPlayerIndex = this.getMyPlayerIndex()
-    
-    if (cantoPendiente && cantoPendiente.responder === myPlayerIndex) {
-      if (cantoPendiente.familia === "truco") {
-        // Aceptar Truco/Retruco/Vale Cuatro
-        this.gameState.trucoLevel = cantoPendiente.nivel
+    if (this.gameState.pendingAction) {
+      const action = this.gameState.pendingAction
+
+      if (action.type.includes("TRUCO") || action.type.includes("RETRUCO") || action.type.includes("VALE")) {
         this.gameState.trucoAccepted = true
         this.gameState.handPoints = this.getTrucoPoints()
-        console.log(`[v0] Truco nivel ${cantoPendiente.nivel} aceptado - puntos de mano:`, this.gameState.handPoints)
+        console.log("[v0] Truco accepted - hand points now:", this.gameState.handPoints)
       }
-      
-      if (cantoPendiente.familia === "envido") {
-        // Aceptar Envido y resolver
+
+      if (action.type.includes("ENVIDO")) {
         this.gameState.envidoAccepted = true
         this.resolveEnvido()
-        this.gameState.envidoCerrado = true
-        console.log("[v0] Envido aceptado y resuelto")
+        console.log("[v0] Envido accepted and resolved")
       }
+
+      // Limpiar estado de espera y continuar el juego
+      this.gameState.waitingForResponse = false
+      this.gameState.pendingAction = null
       
-      // Limpiar canto pendiente
-      this.gameState.cantoPendiente = null
-      console.log("[v0] Canto aceptado - juego continúa")
+      console.log("[v0] Bet accepted - game continues normally")
     }
-    
+
     return this.gameState
   }
 
   private rejectBet(): GameState {
-    const cantoPendiente = this.gameState.cantoPendiente
-    const myPlayerIndex = this.getMyPlayerIndex()
-    
-    if (cantoPendiente && cantoPendiente.responder === myPlayerIndex) {
-      const cantanteIndex = cantoPendiente.cantante
-      
-      if (cantoPendiente.familia === "truco") {
-        // Rechazar Truco: el cantante gana los puntos del nivel anterior
-        const points = cantoPendiente.nivel === 1 ? 1 : cantoPendiente.nivel === 2 ? 2 : 3
-        this.gameState.players[cantanteIndex].score += points
-        console.log(`[v0] Truco rechazado - cantante gana ${points} puntos`)
+    if (this.gameState.pendingAction) {
+      const action = this.gameState.pendingAction
+      const opponentId = this.myPlayerId === "player1" ? "player2" : "player1"
+      const opponentIndex = opponentId === "player1" ? 0 : 1
+
+      if (action.type.includes("TRUCO") || action.type.includes("RETRUCO") || action.type.includes("VALE")) {
+        const points = this.gameState.trucoLevel === 1 ? 1 : this.gameState.trucoLevel === 2 ? 2 : 3
+        this.gameState.players[opponentIndex].score += points
       }
-      
-      if (cantoPendiente.familia === "envido") {
-        // Rechazar Envido: el cantante gana los puntos base
+
+      if (action.type.includes("ENVIDO")) {
         const points = this.getEnvidoPoints()
-        this.gameState.players[cantanteIndex].score += points
-        this.gameState.envidoCerrado = true
-        console.log(`[v0] Envido rechazado - cantante gana ${points} puntos`)
+        this.gameState.players[opponentIndex].score += points
       }
-      
-      // Limpiar canto pendiente
-      this.gameState.cantoPendiente = null
-      
-      // Verificar si el juego terminó
-      if (this.gameState.players[cantanteIndex].score >= 30) {
+
+      this.gameState.waitingForResponse = false
+      this.gameState.pendingAction = null
+
+      if (this.gameState.players[opponentIndex].score >= 30) {
         this.gameState.phase = "finished"
-        console.log("[v0] Juego terminado - cantante alcanzó 30 puntos")
       } else {
         this.startNewHand()
       }
     }
-    
+
     return this.gameState
   }
 
@@ -463,20 +418,21 @@ export class OnlineTrucoEngine {
     const myPlayerIndex = this.getMyPlayerIndex()
     const opponentIndex = 1 - myPlayerIndex
     
-    // Si hay canto pendiente, el oponente lo gana automáticamente
-    if (this.gameState.cantoPendiente) {
-      const cantoPendiente = this.gameState.cantoPendiente
-      if (cantoPendiente.familia === "truco") {
-        const points = cantoPendiente.nivel === 1 ? 1 : cantoPendiente.nivel === 2 ? 2 : 3
-        this.gameState.players[cantoPendiente.cantante].score += points
-        console.log(`[v0] Irse al mazo con Truco pendiente - cantante gana ${points} puntos`)
+    // Si hay acción pendiente, el oponente lo gana automáticamente
+    if (this.gameState.pendingAction) {
+      const action = this.gameState.pendingAction
+      if (action.type.includes("TRUCO") || action.type.includes("RETRUCO") || action.type.includes("VALE")) {
+        const points = this.gameState.trucoLevel === 1 ? 1 : this.gameState.trucoLevel === 2 ? 2 : 3
+        this.gameState.players[opponentIndex].score += points
+        console.log(`[v0] Irse al mazo con Truco pendiente - oponente gana ${points} puntos`)
       }
-      if (cantoPendiente.familia === "envido") {
+      if (action.type.includes("ENVIDO")) {
         const points = this.getEnvidoPoints()
-        this.gameState.players[cantoPendiente.cantante].score += points
-        console.log(`[v0] Irse al mazo con Envido pendiente - cantante gana ${points} puntos`)
+        this.gameState.players[opponentIndex].score += points
+        console.log(`[v0] Irse al mazo con Envido pendiente - oponente gana ${points} puntos`)
       }
-      this.gameState.cantoPendiente = null
+      this.gameState.waitingForResponse = false
+      this.gameState.pendingAction = null
     }
     
     // REGLA OFICIAL: Sumar puntos de Envido si ya fue aceptado
