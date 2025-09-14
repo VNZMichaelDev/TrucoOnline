@@ -55,42 +55,42 @@ export default function TableDisplay({
         </div>
 
         {/* Área de cartas - Oponente (arriba) */}
-        <div className="absolute top-3 sm:top-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2">
-          <div className="bg-black/30 backdrop-blur-sm px-2 sm:px-3 py-1 rounded-full border border-emerald-400/40">
-            <span className="text-emerald-100 text-xs sm:text-sm font-semibold truncate max-w-20 sm:max-w-none">{opponentName}</span>
+        <div className="absolute top-2 sm:top-3 md:top-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-1 sm:gap-2">
+          <div className="bg-black/40 backdrop-blur-sm px-2 sm:px-3 py-1 rounded-full border border-emerald-400/50">
+            <span className="text-emerald-100 text-xs sm:text-sm font-semibold truncate max-w-16 sm:max-w-24 md:max-w-none">{opponentName}</span>
           </div>
-          <div className="relative w-16 h-24 sm:w-20 sm:h-28">
+          <div className="relative w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-28">
             {opponentCard ? (
-              <div className="absolute inset-0 transform transition-all duration-300 drop-shadow-lg z-20">
-                <div className="scale-75 sm:scale-90 md:scale-100 transform -rotate-2">
+              <div className="absolute inset-0 transform transition-all duration-500 drop-shadow-xl z-30">
+                <div className="scale-90 sm:scale-95 md:scale-100 transform -rotate-3 hover:rotate-0 hover:scale-105 transition-all duration-300">
                   <CardComponent card={opponentCard} isOnTable />
                 </div>
               </div>
             ) : (
-              <div className="absolute inset-0 bg-emerald-900/30 border border-dashed border-emerald-400/50 rounded-lg flex items-center justify-center">
-                <span className="text-emerald-300/70 text-xs">...</span>
+              <div className="absolute inset-0 bg-emerald-900/20 border-2 border-dashed border-emerald-400/40 rounded-lg flex items-center justify-center">
+                <span className="text-emerald-300/60 text-xs">...</span>
               </div>
             )}
           </div>
         </div>
 
         {/* Área de cartas - Jugador (abajo) */}
-        <div className="absolute bottom-3 sm:bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2">
-          <div className="relative w-16 h-24 sm:w-20 sm:h-28">
+        <div className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-1 sm:gap-2">
+          <div className="relative w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-28">
             {playerCard ? (
-              <div className="absolute inset-0 transform transition-all duration-300 drop-shadow-lg z-20">
-                <div className="scale-75 sm:scale-90 md:scale-100 transform rotate-1">
+              <div className="absolute inset-0 transform transition-all duration-500 drop-shadow-xl z-30">
+                <div className="scale-90 sm:scale-95 md:scale-100 transform rotate-2 hover:rotate-0 hover:scale-105 transition-all duration-300">
                   <CardComponent card={playerCard} isOnTable />
                 </div>
               </div>
             ) : (
-              <div className="absolute inset-0 bg-emerald-900/30 border border-dashed border-emerald-400/50 rounded-lg flex items-center justify-center animate-pulse">
-                <span className="text-emerald-300/70 text-xs">Tu turno</span>
+              <div className="absolute inset-0 bg-emerald-900/20 border-2 border-dashed border-emerald-400/40 rounded-lg flex items-center justify-center animate-pulse">
+                <span className="text-emerald-300/60 text-xs">Tu turno</span>
               </div>
             )}
           </div>
-          <div className="bg-black/30 backdrop-blur-sm px-2 sm:px-3 py-1 rounded-full border border-emerald-400/40">
-            <span className="text-emerald-100 text-xs sm:text-sm font-semibold truncate max-w-20 sm:max-w-none">{playerName}</span>
+          <div className="bg-black/40 backdrop-blur-sm px-2 sm:px-3 py-1 rounded-full border border-emerald-400/50">
+            <span className="text-emerald-100 text-xs sm:text-sm font-semibold truncate max-w-16 sm:max-w-24 md:max-w-none">{playerName}</span>
           </div>
         </div>
 
