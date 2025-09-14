@@ -10,6 +10,8 @@ interface TableDisplayProps {
   opponentName?: string
   playerName?: string
   className?: string
+  bazaCards?: Card[]
+  currentBaza?: number
 }
 
 export default function TableDisplay({
@@ -18,6 +20,8 @@ export default function TableDisplay({
   opponentName = "Oponente",
   playerName = "Tú",
   className,
+  bazaCards = [],
+  currentBaza = 0,
 }: TableDisplayProps) {
   return (
     <div className={cn("relative w-full h-full flex items-center justify-center px-4", className)}>
