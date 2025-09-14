@@ -297,25 +297,26 @@ export class OnlineGameManager {
           const room = rooms[0]
           console.log("[v0] Found game room via polling:", room.id, "Status:", room.status)
           
-          this.currentRoom = room
-          this.hasFoundOpponent = true
-          this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
-          
-          // Limpiar polling de matchmaking
-          if (this.matchmakingInterval) {
-            clearInterval(this.matchmakingInterval)
-            this.matchmakingInterval = null
-          }
-          
-          // Eliminar de cola de matchmaking
-          await this.supabase.from("matchmaking_queue").delete().eq("player_id", this.currentPlayer.id)
-          
-          // Iniciar suscripciones de juego
-          this.subscribeToGameUpdates()
-          this.startGameStatePolling()
+          // NUEVO: Solo proceder si es una sala NUEVA (sin estado de juego)
+          if (!room.current_game_state || Object.keys(room.current_game_state).length === 0) {
+            this.currentRoom = room
+            this.hasFoundOpponent = true
+            this.statusCallback?.("¡Oponente encontrado! Iniciando partida...")
 
-          // Solo player1 inicia el juego y solo si está en waiting
-          if (this.isPlayerOne() && room.status === "waiting" && !room.current_game_state) {
+            // Limpiar polling de matchmaking
+            if (this.matchmakingInterval) {
+              clearInterval(this.matchmakingInterval)
+              this.matchmakingInterval = null
+            }
+
+            // Iniciar suscripciones de juego
+            this.subscribeToGameUpdates()
+            this.startGameStatePolling()
+
+            // Solo player1 puede iniciar el juego
+            if (this.isPlayerOne()) {
+              setTimeout(() => this.attemptAutoStart(), 1000)
+            }
             console.log("[v0] I am player1, will attempt auto-start in 2 seconds")
             setTimeout(() => this.attemptAutoStart(), 2000)
           } else if (room.status === "active" && room.current_game_state) {
@@ -499,7 +500,7 @@ export class OnlineGameManager {
     if (!this.currentPlayer) return
 
     try {
-      // Limpiar TODAS las salas donde participo que no estén en juego activo
+      // AGRESIVO: Eliminar TODAS las salas donde participo (excepto finished)
       const { data: myRooms } = await this.supabase
         .from("game_rooms")
         .select("*")
@@ -507,15 +508,13 @@ export class OnlineGameManager {
         .neq("status", "finished")
 
       if (myRooms && myRooms.length > 0) {
+        console.log(`[v0] Found ${myRooms.length} rooms to clean up`)
         for (const room of myRooms) {
-          // Solo eliminar si no hay juego activo o si es una sala waiting/active sin estado válido
-          if (room.status === "waiting" || 
-              (room.status === "active" && !room.current_game_state) ||
-              (room.status === "active" && room.current_game_state && Object.keys(room.current_game_state).length === 0)) {
-            console.log("[v0] Cleaning up room:", room.id, "Status:", room.status)
-            await this.supabase.from("game_rooms").delete().eq("id", room.id)
-          }
+          // ELIMINAR TODAS las salas (waiting y active) - no más reconexión
+          console.log("[v0] Aggressively cleaning up room:", room.id, "Status:", room.status)
+          await this.supabase.from("game_rooms").delete().eq("id", room.id)
         }
+        console.log("[v0] All rooms cleaned up successfully")
       }
     } catch (error) {
       console.error("[v0] Error cleaning up rooms:", error)
