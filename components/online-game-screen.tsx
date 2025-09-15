@@ -194,6 +194,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
     const isMyTurnNow = gameEngine.isMyTurn()
     const isWaitingForResponse = gameState.waitingForResponse
     const isResponse = action.type === "ACCEPT" || action.type === "REJECT"
+    const isCantoEscalacion = ["SING_RETRUCO", "SING_VALE_CUATRO", "SING_REAL_ENVIDO", "SING_FALTA_ENVIDO"].includes(action.type)
 
     console.log(
       "[v0] Processing action:",
@@ -204,20 +205,24 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
       isWaitingForResponse,
       "isResponse:",
       isResponse,
+      "isCantoEscalacion:",
+      isCantoEscalacion
     )
 
-    if (isResponse) {
-      if (isMyTurnNow) {
+    if (isResponse || isCantoEscalacion) {
+      // Para respuestas (ACCEPT/REJECT) y cantos de escalación (RETRUCO, etc.)
+      if (isMyTurnNow && isResponse) {
         console.log("[v0] Cannot respond to own bet")
         setMessage("No puedes responder a tu propia apuesta")
         return
       }
-      if (!isWaitingForResponse) {
+      if (!isWaitingForResponse && (isResponse || isCantoEscalacion)) {
         console.log("[v0] No bet to respond to")
         setMessage("No hay apuesta para responder")
         return
       }
     } else {
+      // Para acciones normales (TRUCO, ENVIDO, PLAY_CARD, etc.)
       if (!isMyTurnNow) {
         console.log("[v0] Not my turn, cannot perform action:", action.type)
         showTurnNotification("No es tu turno")
