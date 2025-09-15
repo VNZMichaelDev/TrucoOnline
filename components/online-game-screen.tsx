@@ -93,6 +93,12 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
           }, 3000)
         }
         
+        // NUEVO: Mostrar notificación de nueva mano
+        if (newGameState.phase === "new-hand") {
+          const manoPlayer = newGameState.players[newGameState.mano]
+          showTurnNotification(`Nueva mano - Es mano: ${manoPlayer?.name || 'Jugador'}`)
+        }
+        
         // Mostrar notificaciones para resultados de Envido
         if (newGameState.envidoResult?.showResult) {
           const player1Name = gameEngine?.getCurrentPlayer()?.name || "Jugador 1"
@@ -139,7 +145,7 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
             console.log("[v0] Game states updated - gameReady: true, gameEngine: set, gameState: set")
 
             const currentRoom = gameManager.getCurrentRoom()
-            if (currentRoom?.status === "playing") {
+            if (currentRoom?.status === "active") {
               console.log("[v0] Game is now playing, updating status")
               setStatus("¡Partida en curso!")
             } else if (currentRoom?.status === "waiting" && !autoStartAttempted && gameManager.isPlayerOne()) {
@@ -639,6 +645,14 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 Continuar
               </Button>
             )}
+            
+            {gameState.phase === "new-hand" && (
+              <div className="w-full bg-amber-600/20 border border-amber-600 rounded-lg p-2 text-center">
+                <span className="text-amber-200 text-xs font-bold">
+                  Nueva mano - Es mano: {gameState.players[gameState.mano]?.name}
+                </span>
+              </div>
+            )}
 
             {gameState.phase === "game_finished" && (
               <Button
@@ -646,6 +660,16 @@ export default function OnlineGameScreen({ playerName, onBackToMenu, user }: Onl
                 className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-8 text-xs rounded-lg mt-1"
               >
                 Volver al Menú
+              </Button>
+            )}
+            
+            {gameState.phase === "hand_finished" && (
+              <Button
+                onClick={() => handleGameAction({ type: "START_NEW_HAND" })}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-8 text-xs rounded-lg mt-1"
+                disabled={isProcessing}
+              >
+                Nueva Mano
               </Button>
             )}
           </div>
