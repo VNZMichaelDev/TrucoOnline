@@ -129,7 +129,10 @@ export class OnlineTrucoEngine {
     const isMyTurn = this.isMyTurn()
     const isFirstBaza = this.gameState.currentBaza === 0
     const hasPlayedCard = this.gameState.table.length > 0
-    const isWaitingForMyResponse = this.gameState.waitingForResponse && !isMyTurn
+    const isWaitingForResponse = this.gameState.waitingForResponse
+    
+    // CORREGIDO: Determinar si puedo responder a un canto
+    const canRespond = isWaitingForResponse && !isMyTurn
     
     // REGLA OFICIAL: Envido solo antes de cualquier carta jugada en toda la mano
     const anyCardPlayedInHand = this.gameState.bazas.some(baza => baza.cards.length > 0) || hasPlayedCard
@@ -141,8 +144,8 @@ export class OnlineTrucoEngine {
       isMyTurn,
       trucoLevel: this.gameState.trucoLevel,
       envidoLevel: this.gameState.envidoLevel,
-      waitingForResponse: this.gameState.waitingForResponse,
-      isWaitingForMyResponse,
+      waitingForResponse: isWaitingForResponse,
+      canRespond,
       pendingAction: this.gameState.pendingAction?.type,
       envidoCerrado: this.gameState.envidoCerrado,
       anyCardPlayedInHand,
@@ -151,18 +154,18 @@ export class OnlineTrucoEngine {
     })
 
     return {
-      canSingTruco: !!(isMyTurn && !this.gameState.waitingForResponse && this.gameState.trucoLevel === 0 && canSingTruco),
-      canSingRetruco: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO"),
-      canSingValeCuatro: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO"),
+      canSingTruco: !!(isMyTurn && !isWaitingForResponse && this.gameState.trucoLevel === 0 && canSingTruco),
+      canSingRetruco: !!(canRespond && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO"),
+      canSingValeCuatro: !!(canRespond && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO"),
       
       // CORREGIDO: Envido solo en primera baza y ANTES de cualquier carta jugada
-      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayedInHand),
-      canSingRealEnvido: !!(isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO"),
-      canSingFaltaEnvido: !!(isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)),
+      canSingEnvido: !!(isMyTurn && !isWaitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayedInHand),
+      canSingRealEnvido: !!(canRespond && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO"),
+      canSingFaltaEnvido: !!(canRespond && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)),
       
-      canAccept: !!isWaitingForMyResponse,
-      canReject: !!isWaitingForMyResponse,
-      canGoToDeck: !!(isMyTurn && !this.gameState.waitingForResponse),
+      canAccept: !!canRespond,
+      canReject: !!canRespond,
+      canGoToDeck: !!(isMyTurn && !isWaitingForResponse),
     }
   }
 
@@ -201,7 +204,13 @@ export class OnlineTrucoEngine {
       case "GO_TO_DECK":
         return this.goToDeck()
       case "START_NEW_HAND":
-        this.startNewHand()
+        // Cambiar de "new-hand" a "playing" para continuar el juego
+        if (this.gameState.phase === "new-hand") {
+          this.gameState.phase = "playing"
+          console.log("[v0] Cambiando de new-hand a playing")
+        } else {
+          this.startNewHand()
+        }
         return this.gameState
       case "CONTINUE_AFTER_BAZA":
         return this.continueAfterBaza()
@@ -279,14 +288,15 @@ export class OnlineTrucoEngine {
 
     this.gameState.lastWinner = winner
     this.gameState.currentBaza++
-    this.gameState.table = []
+    
+    // CORREGIDO: NO limpiar la mesa inmediatamente - mostrar resultado de baza
+    this.gameState.phase = "baza-result"
 
     if (this.isHandFinished()) {
       this.finishHand()
     } else {
       // CORREGIDO: El ganador de la baza inicia la siguiente baza
       this.gameState.currentPlayer = winner
-      this.gameState.phase = "playing"
     }
   }
 
@@ -299,7 +309,8 @@ export class OnlineTrucoEngine {
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_TRUCO" }
       
-      console.log("[v0] Truco cantado - esperando respuesta del oponente")
+      // CORREGIDO: NO cambiar turno al cantar - el oponente debe responder
+      console.log("[v0] Truco cantado - esperando respuesta del oponente, turno sigue siendo:", this.gameState.currentPlayer)
     }
     return this.gameState
   }
@@ -312,7 +323,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
       
       console.log("[v0] Retruco cantado - esperando respuesta del oponente original")
-      // CORREGIDO: Cambiar el turno de vuelta al cantante original del Truco
+      // CORREGIDO: El turno vuelve al cantante original del Truco para que responda
       this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
@@ -326,7 +337,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
       
       console.log("[v0] Vale Cuatro cantado - esperando respuesta del oponente original")
-      // CORREGIDO: Cambiar el turno de vuelta al cantante original del Retruco
+      // CORREGIDO: El turno vuelve al cantante original del Retruco para que responda
       this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
@@ -349,7 +360,8 @@ export class OnlineTrucoEngine {
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_ENVIDO" }
       
-      console.log("[v0] Envido cantado - esperando respuesta del oponente")
+      // CORREGIDO: NO cambiar turno al cantar - el oponente debe responder
+      console.log("[v0] Envido cantado - esperando respuesta del oponente, turno sigue siendo:", this.gameState.currentPlayer)
     } else {
       console.log("[v0] No se puede cantar Envido - condiciones no cumplidas")
     }
@@ -364,7 +376,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
       
       console.log("[v0] Real Envido cantado - esperando respuesta del oponente original")
-      // CORREGIDO: Cambiar el turno de vuelta al cantante original del Envido
+      // CORREGIDO: El turno vuelve al cantante original del Envido para que responda
       this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
@@ -378,7 +390,7 @@ export class OnlineTrucoEngine {
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
       
       console.log("[v0] Falta Envido cantado - esperando respuesta del oponente original")
-      // CORREGIDO: Cambiar el turno de vuelta al cantante original
+      // CORREGIDO: El turno vuelve al cantante original para que responda
       this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
@@ -413,20 +425,21 @@ export class OnlineTrucoEngine {
   private rejectBet(): GameState {
     if (this.gameState.pendingAction) {
       const action = this.gameState.pendingAction
-      // CORREGIDO: El que cantó gana los puntos cuando rechazan
-      const cantanteId = this.myPlayerId === "player1" ? "player2" : "player1"
-      const cantanteIndex = cantanteId === "player1" ? 0 : 1
+      // CORREGIDO: Determinar quién cantó basado en el turno actual
+      // Si estoy rechazando, significa que el otro jugador cantó
+      const myPlayerIndex = this.getMyPlayerIndex()
+      const cantanteIndex = 1 - myPlayerIndex // El oponente es quien cantó
 
       if (action.type.includes("TRUCO") || action.type.includes("RETRUCO") || action.type.includes("VALE")) {
         const points = this.gameState.trucoLevel === 1 ? 1 : this.gameState.trucoLevel === 2 ? 2 : 3
         this.gameState.players[cantanteIndex].score += points
-        console.log(`[v0] Truco rechazado - cantante gana ${points} puntos`)
+        console.log(`[v0] Truco rechazado - cantante (${this.gameState.players[cantanteIndex].name}) gana ${points} puntos`)
       }
 
       if (action.type.includes("ENVIDO")) {
         const points = this.getEnvidoPoints()
         this.gameState.players[cantanteIndex].score += points
-        console.log(`[v0] Envido rechazado - cantante gana ${points} puntos`)
+        console.log(`[v0] Envido rechazado - cantante (${this.gameState.players[cantanteIndex].name}) gana ${points} puntos`)
       }
 
       this.gameState.waitingForResponse = false
@@ -606,7 +619,7 @@ export class OnlineTrucoEngine {
     this.gameState.pendingAction = null
     this.gameState.handPoints = 1
     this.gameState.envidoPoints = 0
-    this.gameState.phase = "playing"
+    this.gameState.phase = "new-hand"
     this.gameState.envidoCerrado = false
     
     // NUEVO: Limpiar resultado del Envido anterior
@@ -623,6 +636,9 @@ export class OnlineTrucoEngine {
     this.gameState.players[1].hand = shuffledDeck.slice(3, 6)
 
     console.log("[v0] Nueva mano iniciada - Mano:", this.gameState.mano, "Jugador actual:", this.gameState.currentPlayer)
+    
+    // La fase cambiará a "playing" cuando se procese la acción START_NEW_HAND
+    console.log("[v0] Nueva mano configurada, esperando acción START_NEW_HAND para continuar")
   }
 
   public getPlayerId(): string {
@@ -664,8 +680,7 @@ export class OnlineTrucoEngine {
   }
 
   private continueAfterBaza(): GameState {
-    // CORREGIDO: Mantener cartas visibles hasta que el usuario continúe
-    // Solo limpiar la mesa cuando se continúa explícitamente
+    // CORREGIDO: Limpiar la mesa y continuar con la siguiente baza
     this.gameState.table = []
     
     // Si la mano terminó, no continuar jugando
@@ -674,6 +689,7 @@ export class OnlineTrucoEngine {
     } else {
       // Continuar con la siguiente baza
       this.gameState.phase = "playing"
+      console.log("[v0] Continuando a la siguiente baza - turno de:", this.gameState.players[this.gameState.currentPlayer].name)
     }
     
     return this.gameState

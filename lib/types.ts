@@ -44,7 +44,7 @@ export interface GameState {
   envidoPoints: number
   mano: number
   lastWinner: number | null
-  phase: "waiting" | "playing" | "hand_finished" | "game_finished"
+  phase: "waiting" | "playing" | "baza-result" | "new-hand" | "hand_finished" | "game_finished"
   winner?: number
   gameFinished?: boolean
   handWinner?: number
