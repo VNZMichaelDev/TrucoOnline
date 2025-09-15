@@ -131,9 +131,11 @@ export class OnlineTrucoEngine {
     const hasPlayedCard = this.gameState.table.length > 0
     const isWaitingForMyResponse = this.gameState.waitingForResponse && !isMyTurn
     
-    const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
-    const envidoAlreadySung = this.gameState.envidoLevel > 0 || this.gameState.envidoAccepted
-    const anyCardPlayed = this.gameState.bazas.some(baza => baza.cards.length > 0) || hasPlayedCard
+    // REGLA OFICIAL: Envido solo antes de cualquier carta jugada en toda la mano
+    const anyCardPlayedInHand = this.gameState.bazas.some(baza => baza.cards.length > 0) || hasPlayedCard
+    const envidoAlreadySung = this.gameState.envidoLevel > 0 || this.gameState.envidoAccepted || this.gameState.envidoCerrado
+    
+    const canSingTruco = (this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted) && !hasPlayedCard
 
     console.log("[v0] BettingState Debug:", {
       isMyTurn,
@@ -142,7 +144,10 @@ export class OnlineTrucoEngine {
       waitingForResponse: this.gameState.waitingForResponse,
       isWaitingForMyResponse,
       pendingAction: this.gameState.pendingAction?.type,
-      envidoCerrado: this.gameState.envidoCerrado
+      envidoCerrado: this.gameState.envidoCerrado,
+      anyCardPlayedInHand,
+      isFirstBaza,
+      hasPlayedCard
     })
 
     return {
@@ -150,7 +155,8 @@ export class OnlineTrucoEngine {
       canSingRetruco: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 1 && this.gameState.pendingAction?.type === "SING_TRUCO"),
       canSingValeCuatro: !!(isWaitingForMyResponse && this.gameState.trucoLevel === 2 && this.gameState.pendingAction?.type === "SING_RETRUCO"),
       
-      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && !this.gameState.envidoCerrado && isFirstBaza && !anyCardPlayed && this.gameState.players[0].hand.length === 3 && this.gameState.players[1].hand.length === 3),
+      // CORREGIDO: Envido solo en primera baza y ANTES de cualquier carta jugada
+      canSingEnvido: !!(isMyTurn && !this.gameState.waitingForResponse && !envidoAlreadySung && isFirstBaza && !anyCardPlayedInHand),
       canSingRealEnvido: !!(isWaitingForMyResponse && this.gameState.envidoLevel === 1 && this.gameState.pendingAction?.type === "SING_ENVIDO"),
       canSingFaltaEnvido: !!(isWaitingForMyResponse && (this.gameState.envidoLevel >= 1) && (this.gameState.pendingAction?.type?.includes("ENVIDO") ?? false)),
       
@@ -163,13 +169,15 @@ export class OnlineTrucoEngine {
   public processAction(action: GameAction): GameState {
     const isMyTurn = this.isMyTurn()
     const isResponse = action.type === "ACCEPT" || action.type === "REJECT"
+    const isCantoEscalacion = ["SING_RETRUCO", "SING_VALE_CUATRO", "SING_REAL_ENVIDO", "SING_FALTA_ENVIDO"].includes(action.type)
 
-    if (!isMyTurn && !isResponse) {
+    // CORREGIDO: Permitir cantos de escalación aunque no sea "mi turno"
+    if (!isMyTurn && !isResponse && !isCantoEscalacion) {
       console.log("[v0] Not my turn, ignoring action:", action.type, "currentPlayer:", this.gameState.currentPlayer)
       return this.gameState
     }
 
-    console.log("[v0] Processing action:", action.type)
+    console.log("[v0] Processing action:", action.type, "isCantoEscalacion:", isCantoEscalacion)
 
     switch (action.type) {
       case "PLAY_CARD":
@@ -226,10 +234,10 @@ export class OnlineTrucoEngine {
     // Add card to table
     this.gameState.table.push(playedCard)
 
-    // REGLA OFICIAL: Cerrar Envido después de la primera carta jugada
-    if (!this.gameState.envidoCerrado && this.gameState.table.length === 1) {
+    // REGLA OFICIAL: Cerrar Envido después de la primera carta jugada EN TODA LA MANO
+    if (!this.gameState.envidoCerrado) {
       this.gameState.envidoCerrado = true
-      console.log("[v0] Envido cerrado - primera carta jugada")
+      console.log("[v0] Envido cerrado - primera carta jugada en la mano")
     }
 
     // If both players have played, resolve baza
@@ -286,7 +294,7 @@ export class OnlineTrucoEngine {
     // REGLA OFICIAL: Solo se puede cantar Truco si no hay Envido pendiente
     const canSingTruco = this.gameState.envidoLevel === 0 || this.gameState.envidoAccepted
     
-    if (this.gameState.trucoLevel === 0 && canSingTruco) {
+    if (this.gameState.trucoLevel === 0 && canSingTruco && !this.gameState.waitingForResponse) {
       this.gameState.trucoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_TRUCO" }
@@ -303,8 +311,9 @@ export class OnlineTrucoEngine {
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_RETRUCO" }
       
-      console.log("[v0] Retruco cantado - esperando respuesta del oponente")
-      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
+      console.log("[v0] Retruco cantado - esperando respuesta del oponente original")
+      // CORREGIDO: Cambiar el turno de vuelta al cantante original del Truco
+      this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
   }
@@ -316,22 +325,33 @@ export class OnlineTrucoEngine {
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_VALE_CUATRO" }
       
-      console.log("[v0] Vale Cuatro cantado - esperando respuesta del oponente")
-      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
+      console.log("[v0] Vale Cuatro cantado - esperando respuesta del oponente original")
+      // CORREGIDO: Cambiar el turno de vuelta al cantante original del Retruco
+      this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
   }
 
   private singEnvido(): GameState {
-    // REGLA OFICIAL: Envido solo en primera baza y antes de jugar cartas
-    const anyCardPlayed = this.gameState.bazas.some(baza => baza.cards.length > 0) || this.gameState.table.length > 0
+    // REGLA OFICIAL: Envido solo en primera baza y ANTES de cualquier carta jugada en toda la mano
+    const anyCardPlayedInHand = this.gameState.bazas.some(baza => baza.cards.length > 0) || this.gameState.table.length > 0
+    const isFirstBaza = this.gameState.currentBaza === 0
     
-    if (this.gameState.envidoLevel === 0 && this.gameState.currentBaza === 0 && !anyCardPlayed) {
+    console.log("[v0] singEnvido check:", {
+      envidoLevel: this.gameState.envidoLevel,
+      isFirstBaza,
+      anyCardPlayedInHand,
+      envidoCerrado: this.gameState.envidoCerrado
+    })
+    
+    if (this.gameState.envidoLevel === 0 && isFirstBaza && !anyCardPlayedInHand && !this.gameState.envidoCerrado) {
       this.gameState.envidoLevel = 1
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_ENVIDO" }
       
       console.log("[v0] Envido cantado - esperando respuesta del oponente")
+    } else {
+      console.log("[v0] No se puede cantar Envido - condiciones no cumplidas")
     }
     return this.gameState
   }
@@ -343,8 +363,9 @@ export class OnlineTrucoEngine {
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_REAL_ENVIDO" }
       
-      console.log("[v0] Real Envido cantado - esperando respuesta del oponente")
-      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
+      console.log("[v0] Real Envido cantado - esperando respuesta del oponente original")
+      // CORREGIDO: Cambiar el turno de vuelta al cantante original del Envido
+      this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
   }
@@ -356,8 +377,9 @@ export class OnlineTrucoEngine {
       this.gameState.waitingForResponse = true
       this.gameState.pendingAction = { type: "SING_FALTA_ENVIDO" }
       
-      console.log("[v0] Falta Envido cantado - esperando respuesta del oponente")
-      // NO cambiar el turno - mantener el mismo jugador esperando respuesta
+      console.log("[v0] Falta Envido cantado - esperando respuesta del oponente original")
+      // CORREGIDO: Cambiar el turno de vuelta al cantante original
+      this.gameState.currentPlayer = 1 - this.gameState.currentPlayer
     }
     return this.gameState
   }
@@ -378,11 +400,11 @@ export class OnlineTrucoEngine {
         console.log("[v0] Envido accepted and resolved")
       }
 
-      // Limpiar estado de espera y continuar el juego
+      // CORREGIDO: Limpiar estado de espera y NO cambiar turno
       this.gameState.waitingForResponse = false
       this.gameState.pendingAction = null
       
-      console.log("[v0] Bet accepted - game continues normally")
+      console.log("[v0] Bet accepted - game continues normally, turn remains:", this.gameState.currentPlayer)
     }
 
     return this.gameState
@@ -391,24 +413,28 @@ export class OnlineTrucoEngine {
   private rejectBet(): GameState {
     if (this.gameState.pendingAction) {
       const action = this.gameState.pendingAction
-      const opponentId = this.myPlayerId === "player1" ? "player2" : "player1"
-      const opponentIndex = opponentId === "player1" ? 0 : 1
+      // CORREGIDO: El que cantó gana los puntos cuando rechazan
+      const cantanteId = this.myPlayerId === "player1" ? "player2" : "player1"
+      const cantanteIndex = cantanteId === "player1" ? 0 : 1
 
       if (action.type.includes("TRUCO") || action.type.includes("RETRUCO") || action.type.includes("VALE")) {
         const points = this.gameState.trucoLevel === 1 ? 1 : this.gameState.trucoLevel === 2 ? 2 : 3
-        this.gameState.players[opponentIndex].score += points
+        this.gameState.players[cantanteIndex].score += points
+        console.log(`[v0] Truco rechazado - cantante gana ${points} puntos`)
       }
 
       if (action.type.includes("ENVIDO")) {
         const points = this.getEnvidoPoints()
-        this.gameState.players[opponentIndex].score += points
+        this.gameState.players[cantanteIndex].score += points
+        console.log(`[v0] Envido rechazado - cantante gana ${points} puntos`)
       }
 
       this.gameState.waitingForResponse = false
       this.gameState.pendingAction = null
 
-      if (this.gameState.players[opponentIndex].score >= 30) {
+      if (this.gameState.players[cantanteIndex].score >= 30) {
         this.gameState.phase = "game_finished"
+        this.gameState.winner = cantanteIndex
       } else {
         this.startNewHand()
       }
